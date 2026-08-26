@@ -1,0 +1,27 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M24 40C24 31.1634 31.1634 24 40 24H216C224.837 24 232 31.1634 232 40V216C232 224.837 224.837 232 216 232H40C31.1634 232 24 224.837 24 216V40Z" fill="url(#plate)"/>
+
+  <rect x="52" y="66" width="152" height="60" rx="30" fill="url(#pill)"/>
+  <circle cx="90" cy="96" r="10" fill="#2B3038"/>
+  <circle cx="128" cy="96" r="10" fill="#2B3038"/>
+  <circle cx="166" cy="96" r="10" fill="#2B3038"/>
+
+  <circle cx="82" cy="172" r="20" fill="#7E8896"/>
+  <circle cx="128" cy="172" r="20" fill="#A8B3C1"/>
+  <circle cx="174" cy="172" r="20" fill="url(#accent)"/>
+
+  <defs>
+    <linearGradient id="plate" x1="24" y1="232" x2="232" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#373E48"/>
+      <stop offset="1" stop-color="#5C6675"/>
+    </linearGradient>
+    <linearGradient id="pill" x1="52" y1="126" x2="204" y2="66" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DCE3EC"/>
+      <stop offset="1" stop-color="#F6F9FC"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="154" y1="192" x2="194" y2="152" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1668E3"/>
+      <stop offset="1" stop-color="#57A0FF"/>
+    </linearGradient>
+  </defs>
+</svg>

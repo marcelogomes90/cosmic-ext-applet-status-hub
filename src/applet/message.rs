@@ -1,0 +1,21 @@
+use std::sync::Arc;
+
+use cosmic::applet::token::subscription::TokenUpdate;
+use cosmic::iced::window;
+
+use crate::core::menu::MenuModel;
+use crate::core::model::{ItemAddress, TraySnapshot};
+
+#[derive(Clone, Debug)]
+pub enum Message {
+    Snapshot(Arc<TraySnapshot>),
+    TogglePopup,
+    SurfaceClosed(window::Id),
+    Activate(ItemAddress),
+    SecondaryActivate(ItemAddress),
+    ContextMenu(ItemAddress),
+    Menu(Option<Arc<MenuModel>>),
+    MenuEntry { id: i32, submenu: bool },
+    Token(TokenUpdate),
+    Relayout,
+}

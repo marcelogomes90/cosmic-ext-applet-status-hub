@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=Status Hub
+Comment=Application tray items, gathered behind a single panel button
+Type=Application
+Exec=cosmic-status-hub
+Icon=io.github.marcelogomes90.CosmicStatusHub
+Terminal=false
+Categories=COSMIC;
+Keywords=COSMIC;Applet;Tray;Indicator;Status;SNI;StatusNotifierItem;
+NoDisplay=true
+StartupNotify=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=90
+X-OverflowMinSize=1
