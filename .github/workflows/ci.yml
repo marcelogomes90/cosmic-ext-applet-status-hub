@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libfontconfig-dev \
+            libexpat1-dev \
+            libfreetype6-dev \
+            dbus
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: cargo test
+        run: cargo test --features testkit
+
+  metadata:
+    name: Validate metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install validators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y desktop-file-utils appstream
+
+      - name: Validate desktop entry
+        run: |
+          APPID=io.github.marcelogomes90.cosmic-ext-applet-status-hub
+          # Categories=COSMIC; is what every official COSMIC applet ships and is what the
+          # panel expects, but it is not a registered freedesktop category.
+          output="$(desktop-file-validate "resources/${APPID}.desktop" || true)"
+          output="$(printf '%s\n' "${output}" \
+            | grep -v 'unregistered value "COSMIC"' \
+            | grep -v 'does not contain a registered main category' \
+            | grep -v '^$' || true)"
+          if [ -n "${output}" ]; then printf '%s\n' "${output}"; exit 1; fi
+          echo "desktop entry ok"
+
+      - name: Validate AppStream metainfo
+        run: |
+          APPID=io.github.marcelogomes90.cosmic-ext-applet-status-hub
+          appstreamcli validate --no-net "resources/${APPID}.metainfo.xml"
+
+  manifest:
+    name: Validate Flatpak manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check manifest and vendored sources parse as JSON
+        run: |
+          APPID=io.github.marcelogomes90.cosmic-ext-applet-status-hub
+          python3 -c "
+          import json, sys
+          appid = '${APPID}'
+          base = f'flatpak/{appid}'
+          manifest = json.load(open(f'{base}/{appid}.json'))
+          assert manifest['id'] == appid, manifest['id']
+          sources = json.load(open(f'{base}/cargo-sources.json'))
+          print(f'manifest ok, {len(sources)} vendored sources')
+          "

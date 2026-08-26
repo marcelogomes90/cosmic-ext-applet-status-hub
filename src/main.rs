@@ -16,7 +16,6 @@ fn main() -> cosmic::iced::Result {
 
     let (handle, _join) = core::spawn(runtime.handle(), MemoryOrderStore::default());
 
-    // The core handle borrows this runtime for the process lifetime.
     let _runtime = Box::leak(Box::new(runtime));
 
     cosmic_status_hub::applet::run(handle)

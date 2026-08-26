@@ -4,7 +4,7 @@ pub mod core;
 #[cfg(feature = "testkit")]
 pub mod testkit;
 
-pub const APP_ID: &str = "io.github.marcelogomes90.CosmicStatusHub";
+pub const APP_ID: &str = "io.github.marcelogomes90.cosmic-ext-applet-status-hub";
 
 pub fn init_tracing() {
     use tracing_subscriber::EnvFilter;

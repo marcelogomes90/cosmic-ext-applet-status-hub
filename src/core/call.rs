@@ -13,7 +13,7 @@ pub enum CallError {
     },
     Dbus {
         label: &'static str,
-        source: zbus::Error,
+        source: Box<zbus::Error>,
     },
 }
 
@@ -28,7 +28,7 @@ impl CallError {
         match self {
             Self::Timeout { .. } => true,
             Self::Dbus { source, .. } => !matches!(
-                source,
+                **source,
                 zbus::Error::MethodError(..) | zbus::Error::InterfaceNotFound
             ),
         }
@@ -57,7 +57,7 @@ pub async fn with_timeout<T, E: Into<zbus::Error>>(
         Ok(Ok(value)) => Ok(value),
         Ok(Err(source)) => Err(CallError::Dbus {
             label,
-            source: source.into(),
+            source: Box::new(source.into()),
         }),
         Err(_) => Err(CallError::Timeout {
             label,
@@ -165,7 +165,7 @@ mod tests {
     fn method_errors_are_not_retried() {
         let err = CallError::Dbus {
             label: "x",
-            source: zbus::Error::InterfaceNotFound,
+            source: Box::new(zbus::Error::InterfaceNotFound),
         };
         assert!(!err.is_transient());
     }

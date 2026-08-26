@@ -1,11 +1,13 @@
 [package]
 name = "cosmic-status-hub"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.93"
 license = "GPL-3.0-only"
 description = "An independent StatusNotifierHost tray applet for the COSMIC desktop"
-repository = "https://github.com/marcelogomes90/cosmic-status-hub"
+repository = "https://github.com/marcelogomes90/cosmic-ext-applet-status-hub"
+homepage = "https://github.com/marcelogomes90/cosmic-ext-applet-status-hub"
+readme = "README.md"
 
 [lib]
 name = "cosmic_status_hub"
@@ -38,9 +40,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "5.14", default-features = false, features = ["tokio"] }
 
+# Do not pin a `rev` here. cosmic-panel-config depends on cosmic-config through the
+# bare libcosmic URL, and a `rev` makes that a second, distinct Cargo source for the
+# same repository. flatpak-cargo-generator emits only one source replacement per URL,
+# so the offline Flatpak build then fails to resolve the unpinned copy.
+# Cargo.lock still pins the exact commit, so builds stay reproducible.
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic"
-rev = "2a73fbc0edfe1525381bf999e241d73def79b222"
 default-features = false
 features = [
     "applet",

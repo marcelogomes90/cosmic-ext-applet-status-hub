@@ -285,7 +285,6 @@ impl<S: OrderStore> Core<S> {
 
         loop {
             let event = tokio::select! {
-                // Owner loss must beat late replies that could otherwise briefly resurrect an item.
                 biased;
 
                 Some(name) = lost_names.next() => Event::NameLost(name),
@@ -669,7 +668,6 @@ impl<S: OrderStore> Core<S> {
                 }
             };
 
-            // Subscribe before the first read so no New* signal can fall into a startup gap.
             if tx.send(Event::Changed { seq }).await.is_err() {
                 return;
             }

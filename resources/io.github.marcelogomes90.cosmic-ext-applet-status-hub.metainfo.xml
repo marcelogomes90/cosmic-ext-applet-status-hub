@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.marcelogomes90.cosmic-ext-applet-status-hub</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <project_group>COSMIC</project_group>
+  <developer id="io.github.marcelogomes90">
+    <name>marcelogomes90</name>
+  </developer>
+  <name>Status Hub</name>
+  <summary>Application tray items, gathered behind a single panel button</summary>
+  <description>
+    <p>Status Hub is a StatusNotifierItem tray for the COSMIC desktop. It adds a single chevron button to the panel, pointing at wherever its popup will appear and flipping while the popup is open. Clicking it opens a compact popup holding the tray items, wrapping them onto additional rows when there are many. Nothing else is added to the panel, and the popup is a tray rather than a settings screen.</p>
+    <p>It is an independent implementation written from the StatusNotifierItem and DBusMenu specifications. It is not a fork of COSMIC's Status Area, and it is built to run alongside it.</p>
+    <p>The tray is the part of a desktop most exposed to badly behaved applications: they hang, they exit without warning, they answer with the wrong types, and they restart under a new bus name a millisecond after the old one vanished. Status Hub is organised around not letting any of that become your problem:</p>
+    <ul>
+      <li>An item exists exactly as long as its bus owner exists, so no leftover icons are stranded when an application exits without unregistering.</li>
+      <li>Every remote call has a timeout and every item has its own error budget, so one wedged application cannot delay another, or the popup, or the panel.</li>
+      <li>Every asynchronous reply carries a generation token, so a reply belonging to a process that has already exited can never update its successor.</li>
+      <li>Ordering is a pure function of discovery order and a small remembered list, never of the order in which replies happened to arrive, so every panel shows the same order.</li>
+      <li>The applet dies with the panel and is relaunched by it, rebuilding its entire state on every start, so restarting the panel never requires restarting a tray application.</li>
+    </ul>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/tray-popup.png</image>
+      <caption>Tray items gathered in the popup below the panel chevron</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu.png</image>
+      <caption>An application's tray menu opened from the popup</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-compact.png</image>
+      <caption>A shorter tray menu with a highlighted entry</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-light.png</image>
+      <caption>The same menu following a light COSMIC theme</caption>
+    </screenshot>
+  </screenshots>
+  <launchable type="desktop-id">io.github.marcelogomes90.cosmic-ext-applet-status-hub.desktop</launchable>
+  <url type="homepage">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub</url>
+  <url type="bugtracker">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub/issues</url>
+  <url type="vcs-browser">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub</url>
+  <provides>
+    <id>com.system76.CosmicApplet</id>
+    <binary>cosmic-status-hub</binary>
+  </provides>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>COSMIC</keyword>
+    <keyword>Applet</keyword>
+    <keyword>Tray</keyword>
+    <keyword>Indicator</keyword>
+    <keyword>Status</keyword>
+    <keyword>SNI</keyword>
+    <keyword>StatusNotifierItem</keyword>
+    <keyword>DBusMenu</keyword>
+    <keyword>Panel</keyword>
+  </keywords>
+  <releases>
+    <release type="stable" version="1.0.0" date="2026-08-26">
+      <description>
+        <p>First release.</p>
+        <ul>
+          <li>Collects StatusNotifierItem tray items behind a single panel button.</li>
+          <li>Renders DBusMenu menus, including submenus, checkmarks, and radio groups.</li>
+          <li>Removes items when their bus owner disappears, so no icon is left stranded.</li>
+          <li>Applies a timeout and a per-item error budget to every remote call.</li>
+          <li>Keeps a stable item order that does not depend on reply timing.</li>
+          <li>Runs alongside COSMIC's own Status Area.</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

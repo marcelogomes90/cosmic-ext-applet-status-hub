@@ -1,48 +1,47 @@
-# cosmic-status-hub
+<div align="center">
 
-A StatusNotifierItem tray for the COSMIC desktop, behind a single panel button.
+<img src="resources/io.github.marcelogomes90.cosmic-ext-applet-status-hub.svg" width="128" alt="Status Hub icon" />
 
-The panel shows one chevron button, pointing at wherever its popup will appear and flipping while it
-is open. Clicking it opens a compact popup with the tray items, wrapping them onto additional rows
-when necessary.
-Nothing else is added to the panel, and the popup is not a settings screen.
+# Status Hub
 
-This is an independent implementation, written from the StatusNotifierItem and DBusMenu
-specifications. It is not a fork of COSMIC's Status Area, and it is built to run alongside it.
+A StatusNotifierItem tray for the [COSMIC](https://system76.com/cosmic) desktop, gathered behind
+a single panel button.
 
-## What it is for
+</div>
 
-The tray is the part of a desktop most exposed to badly behaved applications: they hang, they exit
-without warning, they answer with the wrong types, they restart under a new bus name a millisecond
-after the old one vanished. The design here is organised around not letting any of that become the
-user's problem.
+The panel shows one icon. Clicking it opens a compact popup holding the tray items, wrapping them
+onto additional rows when there are many. Nothing else is added to the panel.
 
-- An item exists exactly as long as its bus owner exists. Removal is driven by `NameOwnerChanged`,
-  not by an application remembering to unregister, so there are no leftover icons.
-- Every remote call has a timeout, and every item has its own error budget. One wedged application
-  cannot delay another, or the popup, or the panel.
-- Every asynchronous reply carries a generation token. A reply belonging to a process that has
-  already exited can never update its successor.
-- Ordering is a pure function of discovery order and a small remembered list, never of the order in
-  which futures happened to finish. Every panel shows the same order, and it survives restarts.
-- The applet dies with the panel and is relaunched by it, so it rebuilds its entire state on every
-  start. Restarting the panel never requires restarting a tray application.
+<img src="resources/screenshots/desktop.png" alt="Status Hub popup open on the COSMIC panel, with an application's tray menu expanded below it" />
 
-## Layout
+## Features
 
+- Collects every StatusNotifierItem on the session bus behind one panel button.
+- Renders DBusMenu menus, including submenus, checkmarks, radio groups, separators, and menu
+  icons.
+- Resolves icons from icon names, absolute paths, or raw pixmap bytes, with attention and
+  overlay icon support.
+- Forwards primary, secondary, and context activation, requesting an XDG activation token so the
+  target application can raise its window.
+- Removes an item as soon as its bus owner disappears, so no icon is left stranded when an
+  application exits without unregistering.
+- Applies a timeout and a per-item error budget to every remote call, so one unresponsive
+  application cannot delay another, the popup, or the panel.
+- Follows the panel's anchor, size, and theme, and wraps items onto additional rows as they are
+  added.
+
+## Installation
+
+### Flatpak
+
+```sh
+flatpak remote-add --if-not-exists --user cosmic https://apt.pop-os.org/cosmic/cosmic.flatpakrepo
+flatpak install --user cosmic io.github.marcelogomes90.cosmic-ext-applet-status-hub
 ```
-src/core/     the protocol half: D-Bus, registry, lifecycle, ordering, icons.
-              no toolkit dependency, testable against a private bus with no desktop running.
-src/applet/   the presentation half: renders published snapshots, sends back user intent.
-src/testkit/  fake watcher and fake items, behind the `testkit` feature.
-```
 
-The core publishes immutable snapshots and accepts commands. No user-interface code ever awaits a
-remote application.
+### From source
 
-## Building and installing
-
-Needs a Rust toolchain and, for the tests, `dbus-daemon` on `PATH`.
+Needs a Rust toolchain and the COSMIC development dependencies.
 
 ```sh
 just build-release
@@ -53,25 +52,6 @@ sudo just install      # /usr
 
 Then add **Status Hub** in Settings → Desktop → Panel → Applets.
 
-## Development
-
-```sh
-just verify            # fmt, clippy with -D warnings, and the full test suite
-just test              # unit tests plus integration tests against a private D-Bus session
-```
-
-Two binaries help when something looks wrong:
-
-```sh
-cosmic-status-hub-dump                                       # the core with no UI, printing every snapshot
-cargo run --features testkit --example publish_item -- steam # a synthetic tray item to test against
-```
-
-## Limitations
-
-Documented in [docs/limitations.md](docs/limitations.md), including how this applet coexists with
-COSMIC's own Status Area and why `Activate` receives no coordinates.
-
 ## Licence
 
-GPL-3.0-only.
+GPL-3.0-only. See [LICENSE](LICENSE).
