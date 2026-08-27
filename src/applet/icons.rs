@@ -39,10 +39,20 @@ impl IconCache {
                     kind,
                     size,
                 };
-                let handle = self
-                    .entries
-                    .remove(&key)
-                    .unwrap_or_else(|| build(&options, size));
+                let handle = self.entries.remove(&key).unwrap_or_else(|| {
+                    let (handle, source) = build(&options, size);
+                    tracing::info!(
+                        item = %item.id,
+                        ?kind,
+                        size,
+                        name = options.name.as_deref().unwrap_or("-"),
+                        theme_path = options.theme_path.as_deref().unwrap_or("-"),
+                        pixmap = options.pixels.is_some(),
+                        %source,
+                        "icon resolved"
+                    );
+                    handle
+                });
                 next.insert(key, handle);
             }
         }
@@ -66,11 +76,12 @@ impl IconCache {
     }
 }
 
-fn build(options: &IconOptions, size: u16) -> icon::Handle {
+fn build(options: &IconOptions, size: u16) -> (icon::Handle, String) {
     if let Some(path) = &options.path {
         let path = PathBuf::from(path);
         if path.exists() {
-            return icon::from_path(path);
+            let source = format!("published path {}", path.display());
+            return (icon::from_path(path), source);
         }
     }
 
@@ -78,32 +89,35 @@ fn build(options: &IconOptions, size: u16) -> icon::Handle {
         let extra: Vec<PathBuf> = options
             .theme_path
             .iter()
+            .filter(|path| !path.is_empty())
             .map(|path| PathBuf::from(path.as_str()))
             .collect();
 
-        let published = if extra.is_empty() {
-            None
-        } else {
-            lookup(name, &extra, size)
-        };
-        let themed = lookup(name, &[], size);
-
-        if let Some(path) = themed.or(published) {
-            return handle_for(path, name);
+        if let Some(path) = lookup(name, &extra, size) {
+            let source = format!("name {name} -> {}", path.display());
+            return (handle_for(path, name), source);
         }
     }
 
     if let Some(image) = &options.pixels {
-        return icon::from_raster_pixels(image.width, image.height, image.bytes.clone());
+        let source = format!("pixmap {}x{}", image.width, image.height);
+        return (
+            icon::from_raster_pixels(image.width, image.height, image.bytes.clone()),
+            source,
+        );
     }
 
     for fallback in FALLBACKS {
         if let Some(path) = lookup(fallback, &[], size) {
-            return handle_for(path, fallback);
+            let source = format!("GENERIC {fallback} -> {}", path.display());
+            return (handle_for(path, fallback), source);
         }
     }
 
-    icon::from_name(FALLBACKS[0]).size(size).handle()
+    (
+        icon::from_name(FALLBACKS[0]).size(size).handle(),
+        "GENERIC unresolved".to_owned(),
+    )
 }
 
 fn lookup(name: &str, extra: &[PathBuf], size: u16) -> Option<PathBuf> {

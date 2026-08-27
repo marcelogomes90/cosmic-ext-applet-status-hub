@@ -33,11 +33,13 @@ use crate::core::registry::{Applied, Registry, ResolvedProps};
 use zbus::zvariant::OwnedObjectPath;
 
 const PERSIST_DEBOUNCE: Duration = Duration::from_secs(2);
-const RESOLVE_RETRY_DELAYS: [Duration; 4] = [
+const RESOLVE_RETRY_DELAYS: [Duration; 6] = [
     Duration::from_millis(250),
     Duration::from_secs(1),
     Duration::from_secs(3),
     Duration::from_secs(8),
+    Duration::from_secs(20),
+    Duration::from_secs(45),
 ];
 
 pub trait OrderStore: Send + 'static {
@@ -136,7 +138,12 @@ enum Event {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MenuToken(u64);
 
-type ResolveResult = Result<ResolvedProps, String>;
+struct Resolved {
+    props: ResolvedProps,
+    partial: bool,
+}
+
+type ResolveResult = Result<Resolved, String>;
 
 pub fn spawn(
     runtime: &tokio::runtime::Handle,
@@ -471,9 +478,9 @@ impl<S: OrderStore> Core<S> {
 
     fn on_resolved(&mut self, seq: DiscoverySeq, generation: Generation, result: ResolveResult) {
         let (applied, unsettled) = match result {
-            Ok(props) => {
-                let unsettled =
-                    icons::resolve(&props.icon, props.status, icons::IconKind::Primary, 1)
+            Ok(Resolved { props, partial }) => {
+                let unsettled = partial
+                    || icons::resolve(&props.icon, props.status, icons::IconKind::Primary, 1)
                         .is_empty();
                 (
                     self.registry.apply_resolved(seq, generation, props),
@@ -997,6 +1004,20 @@ async fn item_proxy(
         .await
 }
 
+const IDENTIFYING: usize = 5;
+
+fn answered(identifying: &[Option<&CallError>]) -> Result<(), String> {
+    if identifying.iter().all(Option::is_some) {
+        return Err(identifying
+            .iter()
+            .flatten()
+            .map(ToString::to_string)
+            .next()
+            .unwrap_or_else(|| "item did not answer".to_owned()));
+    }
+    Ok(())
+}
+
 async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> ResolveResult {
     let proxy = item_proxy(connection, address)
         .await
@@ -1050,43 +1071,48 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
         ),
     );
 
-    let identifying: [Option<&CallError>; 5] = [
+    let failures: [Option<&CallError>; 14] = [
         id.as_ref().err(),
         title.as_ref().err(),
         status.as_ref().err(),
         icon_name.as_ref().err(),
         icon_pixmap.as_ref().err(),
+        category.as_ref().err(),
+        item_is_menu.as_ref().err(),
+        menu.as_ref().err(),
+        tooltip.as_ref().err(),
+        theme_path.as_ref().err(),
+        attention_icon_name.as_ref().err(),
+        attention_icon_pixmap.as_ref().err(),
+        overlay_icon_name.as_ref().err(),
+        overlay_icon_pixmap.as_ref().err(),
     ];
-    if identifying.iter().all(Option::is_some) {
-        let reason = identifying
-            .iter()
-            .flatten()
-            .map(ToString::to_string)
-            .next()
-            .unwrap_or_else(|| "item did not answer".to_owned());
-        return Err(reason);
-    }
+    answered(&failures[..IDENTIFYING])?;
+    let partial = failures.into_iter().flatten().any(CallError::is_transient);
 
     let menu_path = menu.ok().filter(|path| path.as_str() != "/");
     let theme_path = theme_path.ok().filter(|path| !path.is_empty());
 
-    Ok(ResolvedProps {
-        id: id.unwrap_or_default(),
-        title: title.unwrap_or_default(),
-        category: category.as_deref().map(Category::from).unwrap_or_default(),
-        status: status.as_deref().map(ItemStatus::from).unwrap_or_default(),
-        item_is_menu: item_is_menu.unwrap_or(false),
-        menu_path,
-        tooltip: tooltip.ok(),
-        icon: Arc::new(IconSource {
-            icon_name: icon_name.unwrap_or_default(),
-            icon_pixmap: icon_pixmap.unwrap_or_default(),
-            attention_icon_name: attention_icon_name.unwrap_or_default(),
-            attention_icon_pixmap: attention_icon_pixmap.unwrap_or_default(),
-            overlay_icon_name: overlay_icon_name.unwrap_or_default(),
-            overlay_icon_pixmap: overlay_icon_pixmap.unwrap_or_default(),
-            theme_path,
-        }),
+    Ok(Resolved {
+        partial,
+        props: ResolvedProps {
+            id: id.unwrap_or_default(),
+            title: title.unwrap_or_default(),
+            category: category.as_deref().map(Category::from).unwrap_or_default(),
+            status: status.as_deref().map(ItemStatus::from).unwrap_or_default(),
+            item_is_menu: item_is_menu.unwrap_or(false),
+            menu_path,
+            tooltip: tooltip.ok(),
+            icon: Arc::new(IconSource {
+                icon_name: icon_name.unwrap_or_default(),
+                icon_pixmap: icon_pixmap.unwrap_or_default(),
+                attention_icon_name: attention_icon_name.unwrap_or_default(),
+                attention_icon_pixmap: attention_icon_pixmap.unwrap_or_default(),
+                overlay_icon_name: overlay_icon_name.unwrap_or_default(),
+                overlay_icon_pixmap: overlay_icon_pixmap.unwrap_or_default(),
+                theme_path,
+            }),
+        },
     })
 }
 

@@ -69,6 +69,21 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.0.1" date="2026-08-26">
+      <description>
+        <p>Icons published by Flatpak applications are found again.</p>
+        <ul>
+          <li>Reads the Flatpak installation directories, so the icons exported by a Flatpak application resolve. They are symbolic links into those directories, and without them every such icon fell back to the generic one whenever the active icon theme did not happen to carry a copy.</li>
+          <li>Reads the per-application Flatpak data directories, where an application such as Steam keeps the icon it names in IconThemePath. Read only, and only what those applications publish.</li>
+          <li>Looks an icon name up once, letting the path the item published win over the icon theme.</li>
+          <li>Ignores an empty icon theme path instead of searching it as a relative directory.</li>
+          <li>Reports the file each icon resolved to, so a missing icon can be diagnosed from the log.</li>
+          <li>Reads the COSMIC configuration without asking to write it.</li>
+          <li>Asks again when an application answers only part of its properties. A slow application could leave an item with no menu, and therefore no right click, until it was restarted.</li>
+          <li>Keeps retrying for about two minutes rather than twelve seconds, which is closer to how long a busy application takes to answer.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.0.0" date="2026-08-26">
       <description>
         <p>First release.</p>

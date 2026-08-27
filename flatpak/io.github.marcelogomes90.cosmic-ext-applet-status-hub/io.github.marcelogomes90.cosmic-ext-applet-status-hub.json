@@ -14,10 +14,13 @@
     "--socket=wayland",
     "--device=dri",
     "--socket=session-bus",
-    "--filesystem=xdg-config/cosmic:rw",
+    "--filesystem=xdg-config/cosmic:ro",
     "--filesystem=host-os:ro",
     "--filesystem=/var/lib/flatpak/exports/share:ro",
     "--filesystem=~/.local/share/flatpak/exports/share:ro",
+    "--filesystem=/var/lib/flatpak/app:ro",
+    "--filesystem=~/.local/share/flatpak/app:ro",
+    "--filesystem=~/.var/app:ro",
     "--filesystem=~/.local/share/icons:ro",
     "--filesystem=~/.icons:ro",
     "--filesystem=/var/lib/snapd/desktop:ro"
@@ -47,7 +50,7 @@
         {
           "type": "git",
           "url": "https://github.com/marcelogomes90/cosmic-ext-applet-status-hub.git",
-          "tag": "v1.0.0"
+          "tag": "v1.0.1"
         },
         {
           "type": "file",

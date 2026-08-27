@@ -363,3 +363,46 @@ async fn an_item_that_starts_answering_again_needs_no_signal_to_come_back() {
     assert!(recovered.state.is_resolved());
     assert!(recovered.menu_path.is_some());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_item_that_answers_only_some_properties_is_asked_again() {
+    let bus = PrivateBus::start().unwrap();
+    let watcher_connection = bus.connect().await.unwrap();
+    FakeWatcher::serve(&watcher_connection).await.unwrap();
+
+    let (handle, _join) = core::spawn_on(
+        &tokio::runtime::Handle::current(),
+        MemoryOrderStore::default(),
+        bus.connect().await.unwrap(),
+    );
+    let mut snapshots = handle.subscribe();
+
+    let connection = bus.connect().await.unwrap();
+    let item = ItemHandle::publish(&connection, "half", ItemBehaviour::PartlyStalls, None)
+        .await
+        .unwrap();
+
+    let snapshot = wait_for(&mut snapshots, "the partial answer to arrive", |s| {
+        s.items
+            .iter()
+            .any(|item| item.icon.icon_name == "application-default")
+    })
+    .await;
+    let partial = &snapshot.items[0];
+    assert!(
+        partial.menu_path.is_none(),
+        "the menu timed out, so a right click has nothing to open"
+    );
+
+    item.set_behaviour(ItemBehaviour::Normal).await;
+
+    let snapshot = wait_for(
+        &mut snapshots,
+        "the rest of the properties to arrive",
+        |s| s.items.iter().any(|item| item.menu_path.is_some()),
+    )
+    .await;
+    let complete = &snapshot.items[0];
+    assert!(complete.state.is_resolved());
+    assert_eq!(complete.key.id, "half");
+}

@@ -17,6 +17,7 @@ pub enum ItemBehaviour {
     NoPrimaryAction,
     ItemIsMenu,
     NoMenu,
+    PartlyStalls,
 }
 
 #[derive(Debug)]
@@ -43,13 +44,21 @@ pub struct ItemHandle {
 }
 
 impl FakeItem {
+    async fn stall_when_partly(&self) {
+        let behaviour = self.0.lock().await.behaviour;
+        if behaviour == ItemBehaviour::PartlyStalls {
+            tokio::time::sleep(Duration::from_mins(10)).await;
+        }
+    }
+
     async fn stall(&self) -> Option<zbus::fdo::Result<()>> {
         let behaviour = self.0.lock().await.behaviour;
         match behaviour {
             ItemBehaviour::Normal
             | ItemBehaviour::NoPrimaryAction
             | ItemBehaviour::ItemIsMenu
-            | ItemBehaviour::NoMenu => None,
+            | ItemBehaviour::NoMenu
+            | ItemBehaviour::PartlyStalls => None,
             ItemBehaviour::Broken => {
                 Some(Err(zbus::fdo::Error::Failed("deliberately broken".into())))
             }
@@ -65,6 +74,7 @@ impl FakeItem {
 impl FakeItem {
     #[zbus(property)]
     async fn id(&self) -> zbus::fdo::Result<String> {
+        self.stall_when_partly().await;
         if let Some(err) = self.stall().await {
             err?;
         }
@@ -115,6 +125,7 @@ impl FakeItem {
 
     #[zbus(property)]
     async fn menu(&self) -> OwnedObjectPath {
+        self.stall_when_partly().await;
         let path = if self.0.lock().await.behaviour == ItemBehaviour::NoMenu {
             "/"
         } else {
