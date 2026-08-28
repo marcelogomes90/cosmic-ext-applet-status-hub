@@ -118,14 +118,36 @@ async fn a_right_click_opens_the_item_menu() {
         "separators are kept for the view to draw"
     );
 
-    assert!(fixture.menu.about_to_show_calls().await >= 1);
-    assert!(
-        fixture
-            .menu
-            .events()
-            .await
-            .contains(&(0, "opened".to_owned()))
-    );
+    assert_eq!(fixture.item.context_calls().await, 0);
+    common::wait_until("the menu announcement", || {
+        futures::executor::block_on(async {
+            fixture.menu.about_to_show_calls().await >= 1
+                && fixture
+                    .menu
+                    .events()
+                    .await
+                    .contains(&(0, "opened".to_owned()))
+        })
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn a_slow_menu_announcement_does_not_delay_the_first_layout() {
+    let mut fixture = Fixture::start(MenuBehaviour::SlowAnnouncement).await;
+    fixture.open();
+
+    let model = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        wait_menu(&mut fixture.menus, "the first menu layout", |menu| {
+            menu.is_some()
+        }),
+    )
+    .await
+    .expect("GetLayout must not wait for AboutToShow")
+    .unwrap();
+
+    assert_eq!(labels(&model), ["Open", "Quit"]);
 }
 
 #[tokio::test]
@@ -331,10 +353,23 @@ async fn a_left_click_never_falls_back_to_the_menu() {
     })
     .await;
     assert!(menus.borrow_and_update().is_none());
+
+    handle.send(CoreCommand::Context {
+        address: snapshot.items[0].address.clone(),
+    });
+    wait_menu(&mut menus, "the menu of a right click", |menu| {
+        menu.is_some()
+    })
+    .await;
+    assert_eq!(
+        item.activate_calls().await,
+        1,
+        "a right click must not activate the item"
+    );
 }
 
 #[tokio::test]
-async fn item_is_menu_does_not_override_the_primary_action() {
+async fn a_left_click_activates_even_a_menu_only_item() {
     let bus = PrivateBus::start().unwrap();
     let watcher_connection = bus.connect().await.unwrap();
     FakeWatcher::serve(&watcher_connection).await.unwrap();
@@ -372,7 +407,7 @@ async fn item_is_menu_does_not_override_the_primary_action() {
 }
 
 #[tokio::test]
-async fn a_right_click_without_a_dbus_menu_does_nothing() {
+async fn a_right_click_without_a_dbus_menu_calls_the_remote_context_menu() {
     let bus = PrivateBus::start().unwrap();
     let watcher_connection = bus.connect().await.unwrap();
     FakeWatcher::serve(&watcher_connection).await.unwrap();
@@ -395,7 +430,39 @@ async fn a_right_click_without_a_dbus_menu_does_nothing() {
         address: snapshot.items[0].address.clone(),
     });
 
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    common::wait_until("the context menu request", || {
+        futures::executor::block_on(item.context_calls()) == 1
+    })
+    .await;
     assert!(menus.borrow_and_update().is_none());
-    assert_eq!(item.context_calls().await, 0);
+    assert_eq!(item.context_calls().await, 1);
+}
+
+#[tokio::test]
+async fn a_middle_click_requests_the_secondary_action() {
+    let bus = PrivateBus::start().unwrap();
+    let watcher_connection = bus.connect().await.unwrap();
+    FakeWatcher::serve(&watcher_connection).await.unwrap();
+
+    let item_connection = bus.connect().await.unwrap();
+    let item = ItemHandle::publish(&item_connection, "secondary", ItemBehaviour::NoMenu, None)
+        .await
+        .unwrap();
+
+    let (handle, _join) = core::spawn_on(
+        &tokio::runtime::Handle::current(),
+        MemoryOrderStore::default(),
+        bus.connect().await.unwrap(),
+    );
+    let mut snapshots = handle.subscribe();
+    let snapshot = wait_for(&mut snapshots, "the item", |s| s.items.len() == 1).await;
+
+    handle.send(CoreCommand::Secondary {
+        address: snapshot.items[0].address.clone(),
+    });
+
+    common::wait_until("the secondary action", || {
+        futures::executor::block_on(item.secondary_calls()) == 1
+    })
+    .await;
 }

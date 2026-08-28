@@ -88,9 +88,6 @@ pub trait StatusNotifierItem {
     fn tool_tip(&self) -> zbus::Result<ToolTip>;
 
     #[zbus(property)]
-    fn item_is_menu(&self) -> zbus::Result<bool>;
-
-    #[zbus(property)]
     fn menu(&self) -> zbus::Result<OwnedObjectPath>;
 
     fn context_menu(&self, x: i32, y: i32) -> zbus::Result<()>;

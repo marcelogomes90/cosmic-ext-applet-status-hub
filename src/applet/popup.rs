@@ -197,20 +197,20 @@ pub fn surface_container<'a, Message: 'static>(
     anchor: PanelAnchor,
 ) -> Element<'a, Message> {
     let icons = icon_row(grid, geometry, padding);
-    let (width, children) = match menu {
+    let width = surface_width(geometry, menu.is_some());
+    let children = match menu {
         Some(menu) => {
             let menu = menu_body(
                 menu,
                 menu_height_budget(geometry.height, separator_height()),
             );
-            let children = if menu_comes_first(anchor) {
+            if menu_comes_first(anchor) {
                 vec![menu, separator(), icons]
             } else {
                 vec![icons, separator(), menu]
-            };
-            (SURFACE_WIDTH, children)
+            }
         }
-        None => (geometry.width, vec![icons]),
+        None => vec![icons],
     };
 
     autosize::autosize(
@@ -223,6 +223,14 @@ pub fn surface_container<'a, Message: 'static>(
     )
     .limits(size_limits())
     .into()
+}
+
+fn surface_width(geometry: GridGeometry, menu_visible: bool) -> u16 {
+    if menu_visible {
+        SURFACE_WIDTH
+    } else {
+        geometry.width
+    }
 }
 
 #[cfg(test)]
@@ -280,5 +288,13 @@ mod tests {
 
         assert_eq!(menu_height_budget(geometry.height, 9), MAX_HEIGHT - 57);
         assert_eq!(menu_height_budget(MAX_HEIGHT, 9), 1);
+    }
+
+    #[test]
+    fn only_a_visible_menu_uses_the_full_width() {
+        let geometry = GridGeometry::calculate(1, 48, 40, 8, 4);
+
+        assert_eq!(surface_width(geometry, false), geometry.width);
+        assert_eq!(surface_width(geometry, true), SURFACE_WIDTH);
     }
 }

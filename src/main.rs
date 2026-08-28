@@ -7,6 +7,8 @@ fn main() -> cosmic::iced::Result {
         "starting cosmic-status-hub"
     );
 
+    cosmic_status_hub::drop_unusable_privileged_socket();
+
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .thread_name("status-hub-dbus")

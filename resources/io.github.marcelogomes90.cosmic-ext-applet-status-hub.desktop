@@ -10,6 +10,7 @@ Keywords=COSMIC;Applet;Tray;Indicator;Status;SNI;StatusNotifierItem;
 NoDisplay=true
 StartupNotify=true
 X-CosmicApplet=true
+X-HostWaylandDisplay=true
 X-CosmicHoverPopup=Auto
 X-OverflowPriority=90
 X-OverflowMinSize=1

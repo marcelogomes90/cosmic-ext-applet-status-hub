@@ -21,8 +21,9 @@ onto additional rows when there are many. Nothing else is added to the panel.
   icons.
 - Resolves icons from icon names, absolute paths, or raw pixmap bytes, with attention and
   overlay icon support.
-- Forwards primary, secondary, and context activation, requesting an XDG activation token so the
-  target application can raise its window.
+- Uses the standard tray mouse controls: left click activates the application, middle click
+  requests its optional secondary action, and right click opens its menu. Activation requests
+  carry an XDG activation token so the target application can raise its window.
 - Removes an item as soon as its bus owner disappears, so no icon is left stranded when an
   application exits without unregistering.
 - Applies a timeout and a per-item error budget to every remote call, so one unresponsive

@@ -206,7 +206,6 @@ pub struct TrayItem {
     pub title: String,
     pub category: Category,
     pub status: ItemStatus,
-    pub item_is_menu: bool,
     pub menu_path: Option<OwnedObjectPath>,
     pub tooltip: Option<ToolTip>,
     pub icon: Arc<IconSource>,

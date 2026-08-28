@@ -14,6 +14,7 @@ pub enum Message {
     Activate(ItemAddress),
     SecondaryActivate(ItemAddress),
     ContextMenu(ItemAddress),
+    RetryIcons(u64),
     Menu(Option<Arc<MenuModel>>),
     MenuEntry { id: i32, submenu: bool },
     Token(TokenUpdate),

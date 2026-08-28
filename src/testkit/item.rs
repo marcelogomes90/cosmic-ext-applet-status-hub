@@ -245,6 +245,10 @@ impl ItemHandle {
         self.item.0.lock().await.context_calls
     }
 
+    pub async fn secondary_calls(&self) -> u32 {
+        self.item.0.lock().await.secondary_calls
+    }
+
     pub async fn activation_tokens(&self) -> Vec<String> {
         self.item.0.lock().await.activation_tokens.clone()
     }

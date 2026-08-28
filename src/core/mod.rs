@@ -193,6 +193,44 @@ struct OpenMenu {
     menu_path: OwnedObjectPath,
     connection: zbus::Connection,
     watch: JoinHandle<()>,
+    fetch: MenuFetchState,
+}
+
+#[derive(Debug, Default)]
+struct MenuFetchState {
+    in_flight: bool,
+    pending: bool,
+    last_revision: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MenuFetchCompletion {
+    accept: bool,
+    fetch_again: bool,
+}
+
+impl MenuFetchState {
+    fn request(&mut self) -> bool {
+        if self.in_flight {
+            self.pending = true;
+            false
+        } else {
+            self.in_flight = true;
+            true
+        }
+    }
+
+    fn complete(&mut self, revision: u32) -> MenuFetchCompletion {
+        self.in_flight = false;
+        let accept = self.last_revision.is_none_or(|current| revision >= current);
+        if accept {
+            self.last_revision = Some(revision);
+        }
+        MenuFetchCompletion {
+            accept,
+            fetch_again: std::mem::take(&mut self.pending),
+        }
+    }
 }
 
 impl OpenMenu {
@@ -525,13 +563,20 @@ impl<S: OrderStore> Core<S> {
     }
 
     fn on_menu_layout(&mut self, token: MenuToken, result: Result<(u32, RawLayout), String>) {
-        let Some(open) = self.open_menu.as_ref().filter(|open| open.token == token) else {
+        let Some(open) = self.open_menu.as_mut().filter(|open| open.token == token) else {
             tracing::debug!("stale menu layout ignored");
             return;
         };
-
         match result {
             Ok((revision, layout)) => {
+                let completion = open.fetch.complete(revision);
+                if !completion.accept {
+                    tracing::debug!(revision, "out-of-order menu layout ignored");
+                    if completion.fetch_again {
+                        self.start_menu_fetch(token, false);
+                    }
+                    return;
+                }
                 let model = MenuModel::from_layout(
                     open.address.clone(),
                     open.item_generation,
@@ -550,8 +595,12 @@ impl<S: OrderStore> Core<S> {
                     "menu ready"
                 );
                 let _ = self.menus.send(Some(Arc::new(model)));
+                if completion.fetch_again {
+                    self.start_menu_fetch(token, false);
+                }
             }
             Err(reason) => {
+                open.fetch.in_flight = false;
                 tracing::warn!(item = %open.address, reason, "menu unavailable");
                 self.invalidate_menu("layout failed");
             }
@@ -559,16 +608,7 @@ impl<S: OrderStore> Core<S> {
     }
 
     fn on_menu_changed(&mut self, token: MenuToken) {
-        let Some(open) = self.open_menu.as_ref().filter(|open| open.token == token) else {
-            return;
-        };
-        self.fetch_layout(
-            open.connection.clone(),
-            open.address.clone(),
-            open.menu_path.clone(),
-            token,
-            false,
-        );
+        self.start_menu_fetch(token, false);
     }
 
     async fn introduce(
@@ -715,21 +755,7 @@ impl<S: OrderStore> Core<S> {
             CoreCommand::SetRemembered(order) => self.adopt_order(order),
 
             CoreCommand::Primary { address, token } => {
-                let Some((_, _, _)) = self.item_for(&address) else {
-                    return;
-                };
-
-                spawn_action(connection, address, move |proxy| async move {
-                    if let Some(token) = token {
-                        let _ = with_timeout(
-                            ACTION_TIMEOUT,
-                            "ProvideXdgActivationToken",
-                            proxy.provide_xdg_activation_token(&token),
-                        )
-                        .await;
-                    }
-                    with_timeout(ACTION_TIMEOUT, "Activate", proxy.activate(0, 0)).await
-                });
+                self.dispatch_primary(connection, address, token);
             }
 
             CoreCommand::Secondary { address } => {
@@ -743,7 +769,7 @@ impl<S: OrderStore> Core<S> {
                 });
             }
 
-            CoreCommand::Context { address } => self.open_menu(connection, &address),
+            CoreCommand::Context { address } => self.dispatch_context(connection, address),
 
             CoreCommand::CloseMenu => self.close_menu(),
 
@@ -818,6 +844,46 @@ impl<S: OrderStore> Core<S> {
         ))
     }
 
+    fn dispatch_context(&mut self, connection: &zbus::Connection, address: ItemAddress) {
+        let Some((_, _, props)) = self.item_for(&address) else {
+            return;
+        };
+        if props.menu_path.is_some() {
+            self.open_menu(connection, &address);
+        } else {
+            spawn_action(connection, address, |proxy| async move {
+                with_timeout(ACTION_TIMEOUT, "ContextMenu", proxy.context_menu(0, 0)).await
+            });
+        }
+    }
+
+    fn dispatch_primary(
+        &mut self,
+        connection: &zbus::Connection,
+        address: ItemAddress,
+        token: Option<String>,
+    ) {
+        if self.item_for(&address).is_none() {
+            return;
+        }
+
+        if token.is_none() {
+            tracing::debug!(item = %address, "activating without an activation token");
+        }
+
+        spawn_action(connection, address, move |proxy| async move {
+            if let Some(token) = token {
+                let _ = with_timeout(
+                    ACTION_TIMEOUT,
+                    "ProvideXdgActivationToken",
+                    proxy.provide_xdg_activation_token(&token),
+                )
+                .await;
+            }
+            with_timeout(ACTION_TIMEOUT, "Activate", proxy.activate(0, 0)).await
+        });
+    }
+
     fn open_menu(&mut self, connection: &zbus::Connection, address: &ItemAddress) {
         let Some((seq, generation, props)) = self.item_for(address) else {
             return;
@@ -841,10 +907,11 @@ impl<S: OrderStore> Core<S> {
             menu_path: menu_path.clone(),
             connection: connection.clone(),
             watch,
+            fetch: MenuFetchState::default(),
         });
 
         tracing::debug!(item = %address, "menu opening");
-        self.fetch_layout(connection.clone(), address.clone(), menu_path, token, true);
+        self.start_menu_fetch(token, true);
     }
 
     fn spawn_menu_watch(
@@ -878,14 +945,16 @@ impl<S: OrderStore> Core<S> {
         })
     }
 
-    fn fetch_layout(
-        &self,
-        connection: zbus::Connection,
-        address: ItemAddress,
-        menu_path: OwnedObjectPath,
-        token: MenuToken,
-        announce: bool,
-    ) {
+    fn start_menu_fetch(&mut self, token: MenuToken, announce: bool) {
+        let Some(open) = self.open_menu.as_mut().filter(|open| open.token == token) else {
+            return;
+        };
+        if !open.fetch.request() {
+            return;
+        }
+        let connection = open.connection.clone();
+        let address = open.address.clone();
+        let menu_path = open.menu_path.clone();
         let tx = self.internal_tx.clone();
         tokio::spawn(async move {
             let proxy = match menu_proxy(&connection, &address, menu_path).await {
@@ -902,13 +971,22 @@ impl<S: OrderStore> Core<S> {
             };
 
             if announce {
-                let _ = with_timeout(
-                    ACTION_TIMEOUT,
-                    "Event(opened)",
-                    proxy.event(0, "opened", &zbus::zvariant::Value::I32(0), 0),
-                )
-                .await;
-                let _ = with_timeout(ACTION_TIMEOUT, "AboutToShow", proxy.about_to_show(0)).await;
+                let announce_proxy = proxy.clone();
+                let announce_tx = tx.clone();
+                tokio::spawn(async move {
+                    let opened = with_timeout(
+                        ACTION_TIMEOUT,
+                        "Event(opened)",
+                        announce_proxy.event(0, "opened", &zbus::zvariant::Value::I32(0), 0),
+                    );
+                    let about_to_show = with_timeout(
+                        ACTION_TIMEOUT,
+                        "AboutToShow",
+                        announce_proxy.about_to_show(0),
+                    );
+                    let _ = futures::join!(opened, about_to_show);
+                    let _ = announce_tx.send(Event::MenuChanged { token }).await;
+                });
             }
 
             let result = with_timeout(LAYOUT_TIMEOUT, "GetLayout", proxy.get_layout(0, -1, &[]))
@@ -1030,7 +1108,6 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
         icon_name,
         icon_pixmap,
         category,
-        item_is_menu,
         menu,
         tooltip,
         theme_path,
@@ -1045,7 +1122,6 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
         with_timeout(PROPERTY_TIMEOUT, "IconName", proxy.icon_name()),
         with_timeout(PROPERTY_TIMEOUT, "IconPixmap", proxy.icon_pixmap()),
         with_timeout(PROPERTY_TIMEOUT, "Category", proxy.category()),
-        with_timeout(PROPERTY_TIMEOUT, "ItemIsMenu", proxy.item_is_menu()),
         with_timeout(PROPERTY_TIMEOUT, "Menu", proxy.menu()),
         with_timeout(PROPERTY_TIMEOUT, "ToolTip", proxy.tool_tip()),
         with_timeout(PROPERTY_TIMEOUT, "IconThemePath", proxy.icon_theme_path()),
@@ -1071,14 +1147,13 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
         ),
     );
 
-    let failures: [Option<&CallError>; 14] = [
+    let failures: [Option<&CallError>; 13] = [
         id.as_ref().err(),
         title.as_ref().err(),
         status.as_ref().err(),
         icon_name.as_ref().err(),
         icon_pixmap.as_ref().err(),
         category.as_ref().err(),
-        item_is_menu.as_ref().err(),
         menu.as_ref().err(),
         tooltip.as_ref().err(),
         theme_path.as_ref().err(),
@@ -1100,7 +1175,6 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
             title: title.unwrap_or_default(),
             category: category.as_deref().map(Category::from).unwrap_or_default(),
             status: status.as_deref().map(ItemStatus::from).unwrap_or_default(),
-            item_is_menu: item_is_menu.unwrap_or(false),
             menu_path,
             tooltip: tooltip.ok(),
             icon: Arc::new(IconSource {
@@ -1187,5 +1261,45 @@ async fn sleep_until_opt(deadline: Option<Instant>) {
     match deadline {
         Some(deadline) => tokio::time::sleep_until(deadline.into()).await,
         None => std::future::pending().await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_layout_updates_are_coalesced_while_a_fetch_is_running() {
+        let mut state = MenuFetchState::default();
+
+        assert!(state.request());
+        assert!(!state.request());
+        assert!(!state.request());
+        assert_eq!(
+            state.complete(4),
+            MenuFetchCompletion {
+                accept: true,
+                fetch_again: true,
+            }
+        );
+        assert!(state.request());
+        assert_eq!(
+            state.complete(5),
+            MenuFetchCompletion {
+                accept: true,
+                fetch_again: false,
+            }
+        );
+    }
+
+    #[test]
+    fn an_older_menu_revision_never_replaces_the_current_one() {
+        let mut state = MenuFetchState::default();
+
+        assert!(state.request());
+        assert!(state.complete(8).accept);
+        assert!(state.request());
+        assert!(!state.complete(7).accept);
+        assert_eq!(state.last_revision, Some(8));
     }
 }

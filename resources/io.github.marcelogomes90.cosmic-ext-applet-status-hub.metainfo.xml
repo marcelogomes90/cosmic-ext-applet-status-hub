@@ -69,6 +69,21 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.0.2" date="2026-08-27">
+      <description>
+        <p>Left click brings the application to the front again, and the tray follows the usual mouse controls.</p>
+        <ul>
+          <li>Asks the panel for its privileged Wayland connection, which is what lets the compositor grant a real activation token. Without it the token was issued but only marked the window urgent, so an application such as ZapZap was told to activate and never came to the front.</li>
+          <li>Restores the standard tray controls: left click activates the application, middle click requests its optional secondary action, and right click opens its menu. Left click no longer falls back to the menu when activation fails, and no longer defers to the menu for items that advertise one.</li>
+          <li>Finds an icon the application publishes under its own IconThemePath before consulting the icon theme, and only accepts a result that really lives there, so an icon theme carrying a same-named copy can no longer win.</li>
+          <li>Retries an icon that fell back to the generic one, on a schedule stretching to about a minute, for applications that publish their icon shortly after registering.</li>
+          <li>Coalesces menu layout requests and discards a layout older than the one already shown, so an application redrawing its menu repeatedly cannot flicker or go backwards.</li>
+          <li>Stops a slow menu announcement from delaying the first layout, so a menu opens as soon as its contents are known.</li>
+          <li>Widens the popup only when a menu is on screen, leaving the tray at the width its icons need.</li>
+          <li>Collapses the panel button to nothing while there are no tray items, instead of holding an empty gap.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.0.1" date="2026-08-26">
       <description>
         <p>Icons published by Flatpak applications are found again.</p>

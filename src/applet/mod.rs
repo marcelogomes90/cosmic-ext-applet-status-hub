@@ -17,6 +17,7 @@ use cosmic::widget::{icon, mouse_area, text};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::APP_ID;
 use crate::applet::icons::IconCache;
@@ -56,6 +57,17 @@ enum PendingTokenAction {
     },
 }
 
+fn panel_surface_size(items_empty: bool, horizontal: bool, button_size: (u16, u16)) -> (u16, u16) {
+    if !items_empty {
+        return button_size;
+    }
+    if horizontal {
+        (1, button_size.1)
+    } else {
+        (button_size.0, 1)
+    }
+}
+
 pub struct StatusHub {
     core: Core,
     tray: CoreHandle,
@@ -68,8 +80,19 @@ pub struct StatusHub {
     token_tx: Option<calloop::channel::Sender<TokenRequest>>,
     next_token_request: u64,
     pending_tokens: HashMap<String, PendingTokenAction>,
+    icon_retry_attempt: usize,
+    icon_retry_nonce: u64,
+    pending_icon_retry: Option<u64>,
 }
 
+const ICON_RETRY_DELAYS: [Duration; 6] = [
+    Duration::from_millis(250),
+    Duration::from_secs(1),
+    Duration::from_secs(3),
+    Duration::from_secs(8),
+    Duration::from_secs(20),
+    Duration::from_secs(45),
+];
 impl StatusHub {
     fn item_icon_size(&self) -> u16 {
         self.core.applet.suggested_size(true).0
@@ -123,20 +146,19 @@ impl StatusHub {
                 .force_enabled(true),
         };
 
+        let address = item.address.clone();
+
         let button: Element<'a, Message> = if self.is_selected(&item.address) {
             popup::selected_item(button)
         } else {
             button.into()
         };
 
-        let address = item.address.clone();
-        let mut area = mouse_area(button)
+        let area = mouse_area(button)
             .interaction(Interaction::Pointer)
             .on_press(Message::Activate(address.clone()))
-            .on_middle_press(Message::SecondaryActivate(address.clone()));
-        if item.menu_path.is_some() {
-            area = area.on_right_press(Message::ContextMenu(address));
-        }
+            .on_middle_press(Message::SecondaryActivate(address.clone()))
+            .on_right_press(Message::ContextMenu(address));
 
         area.into()
     }
@@ -188,7 +210,7 @@ impl StatusHub {
 
         self.icons
             .borrow_mut()
-            .refresh(&self.snapshot, self.item_icon_size());
+            .refresh(&self.snapshot, self.item_icon_size(), false);
         let spacing = u16::try_from(self.core.applet.spacing).unwrap_or(0);
         popup::item_grid(
             self.snapshot
@@ -201,6 +223,7 @@ impl StatusHub {
 
     fn request_token(&mut self, action: PendingTokenAction) -> Task<Message> {
         let Some(token_tx) = self.token_tx.clone() else {
+            tracing::debug!("no activation token channel is available");
             return self.complete_token_action(action, None);
         };
 
@@ -218,9 +241,90 @@ impl StatusHub {
                 .pending_tokens
                 .remove(&exec)
                 .expect("the pending token action was just inserted");
+            tracing::warn!("the activation token channel is closed");
             return self.complete_token_action(action, None);
         }
         Task::none()
+    }
+
+    fn on_token(&mut self, update: TokenUpdate) -> Task<Message> {
+        match update {
+            TokenUpdate::Init(sender) => {
+                self.token_tx = Some(sender);
+                Task::none()
+            }
+            TokenUpdate::Finished => {
+                tracing::warn!("the activation token connection ended");
+                self.token_tx = None;
+                let pending = std::mem::take(&mut self.pending_tokens);
+                Task::batch(
+                    pending
+                        .into_values()
+                        .map(|action| self.complete_token_action(action, None)),
+                )
+            }
+            TokenUpdate::ActivationToken { token, exec } => {
+                tracing::info!(request = %exec, token = token.is_some(), "activation token");
+                match self.pending_tokens.remove(&exec) {
+                    Some(action) => self.complete_token_action(action, token),
+                    None => Task::none(),
+                }
+            }
+        }
+    }
+
+    fn cancel_icon_retry(&mut self) {
+        self.icon_retry_nonce = self.icon_retry_nonce.wrapping_add(1);
+        self.pending_icon_retry = None;
+        self.icon_retry_attempt = 0;
+    }
+
+    fn schedule_icon_retry(&mut self) -> Task<Message> {
+        let Some(&delay) = ICON_RETRY_DELAYS.get(self.icon_retry_attempt) else {
+            self.pending_icon_retry = None;
+            return Task::none();
+        };
+        self.icon_retry_attempt += 1;
+        self.icon_retry_nonce = self.icon_retry_nonce.wrapping_add(1);
+        let nonce = self.icon_retry_nonce;
+        self.pending_icon_retry = Some(nonce);
+        cosmic::task::future(async move {
+            tokio::time::sleep(delay).await;
+            Message::RetryIcons(nonce)
+        })
+    }
+
+    fn refresh_icons(&mut self, retry_fallbacks: bool, restart: bool) -> Task<Message> {
+        let unresolved =
+            self.icons
+                .borrow_mut()
+                .refresh(&self.snapshot, self.item_icon_size(), retry_fallbacks);
+        if !unresolved {
+            self.cancel_icon_retry();
+            return Task::none();
+        }
+        if restart {
+            self.cancel_icon_retry();
+        }
+        self.schedule_icon_retry()
+    }
+
+    fn on_snapshot(&mut self, snapshot: Arc<TraySnapshot>) -> Task<Message> {
+        let emptied = !self.snapshot.items.is_empty() && snapshot.items.is_empty();
+        let visibility_changed = self.snapshot.items.is_empty() != snapshot.items.is_empty();
+        self.snapshot = snapshot;
+
+        let icon_task = self.refresh_icons(false, true);
+        let resize_task = if visibility_changed {
+            self.resize_panel_surface()
+        } else {
+            Task::none()
+        };
+
+        if emptied && self.popup_state != PopupState::Closed {
+            return Task::batch([icon_task, resize_task, self.close_popup(true)]);
+        }
+        Task::batch([icon_task, resize_task])
     }
 
     fn complete_token_action(
@@ -306,6 +410,22 @@ impl StatusHub {
         }
     }
 
+    fn resize_panel_surface(&self) -> Task<Message> {
+        let Some(id) = self.core.main_window_id() else {
+            return Task::none();
+        };
+        let (width, height) = panel_surface_size(
+            self.snapshot.items.is_empty(),
+            self.core.applet.is_horizontal(),
+            self.button_size(),
+        );
+
+        window::resize(
+            id,
+            cosmic::iced::Size::new(f32::from(width), f32::from(height)),
+        )
+    }
+
     fn open_popup_surface(parent: window::Id, id: window::Id) -> Task<Message> {
         cosmic::surface::surface_task(cosmic::surface::action::app_popup::<Self>(
             |_| cosmic::surface::action::LiveSettings::default(),
@@ -348,6 +468,9 @@ impl cosmic::Application for StatusHub {
                 token_tx: None,
                 next_token_request: 0,
                 pending_tokens: HashMap::new(),
+                icon_retry_attempt: 0,
+                icon_retry_nonce: 0,
+                pending_icon_retry: None,
             },
             Task::none(),
         )
@@ -377,15 +500,7 @@ impl cosmic::Application for StatusHub {
         match message {
             Message::Relayout => Task::none(),
 
-            Message::Snapshot(snapshot) => {
-                let emptied = !self.snapshot.items.is_empty() && snapshot.items.is_empty();
-                self.snapshot = snapshot;
-
-                if emptied && self.popup_state != PopupState::Closed {
-                    return self.close_popup(true);
-                }
-                Task::none()
-            }
+            Message::Snapshot(snapshot) => self.on_snapshot(snapshot),
 
             Message::TogglePopup => {
                 if self.popup_state != PopupState::Closed {
@@ -397,12 +512,11 @@ impl cosmic::Application for StatusHub {
                     tray: popup,
                     closing: false,
                 };
-                Self::open_popup_surface(
-                    self.core
-                        .main_window_id()
-                        .expect("applet has a main window"),
-                    popup,
-                )
+                let parent = self
+                    .core
+                    .main_window_id()
+                    .expect("applet has a main window");
+                Self::open_popup_surface(parent, popup)
             }
 
             Message::SurfaceClosed(id) => {
@@ -415,7 +529,10 @@ impl cosmic::Application for StatusHub {
                 Task::none()
             }
 
-            Message::Activate(address) => self.request_token(PendingTokenAction::Activate(address)),
+            Message::Activate(address) => {
+                tracing::info!(item = %address, "primary click");
+                self.request_token(PendingTokenAction::Activate(address))
+            }
 
             Message::SecondaryActivate(address) => {
                 self.tray.send(CoreCommand::Secondary { address });
@@ -423,9 +540,22 @@ impl cosmic::Application for StatusHub {
             }
 
             Message::ContextMenu(address) => {
-                self.pending_menu = Some(address.clone());
+                self.pending_menu = self
+                    .snapshot
+                    .items
+                    .iter()
+                    .find(|item| item.address == address)
+                    .and_then(|item| item.menu_path.as_ref().map(|_| address.clone()));
                 self.tray.send(CoreCommand::Context { address });
                 Task::none()
+            }
+
+            Message::RetryIcons(nonce) => {
+                if self.pending_icon_retry != Some(nonce) {
+                    return Task::none();
+                }
+                self.pending_icon_retry = None;
+                self.refresh_icons(true, false)
             }
 
             Message::Menu(menu) => self.on_menu(menu),
@@ -439,36 +569,22 @@ impl cosmic::Application for StatusHub {
                 None => Task::none(),
             },
 
-            Message::Token(update) => {
-                match update {
-                    TokenUpdate::Init(sender) => self.token_tx = Some(sender),
-                    TokenUpdate::Finished => {
-                        self.token_tx = None;
-                        let pending = std::mem::take(&mut self.pending_tokens);
-                        return Task::batch(
-                            pending
-                                .into_values()
-                                .map(|action| self.complete_token_action(action, None)),
-                        );
-                    }
-                    TokenUpdate::ActivationToken { token, exec } => {
-                        if let Some(action) = self.pending_tokens.remove(&exec) {
-                            return self.complete_token_action(action, token);
-                        }
-                    }
-                }
-                Task::none()
-            }
+            Message::Token(update) => self.on_token(update),
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
         if self.snapshot.items.is_empty() {
-            return self
-                .core
-                .applet
-                .autosize_window(cosmic::widget::space::horizontal().width(Length::Fixed(0.0)))
-                .into();
+            let empty: Element<'_, Message> = if self.core.applet.is_horizontal() {
+                cosmic::widget::space::horizontal()
+                    .width(Length::Fixed(0.0))
+                    .into()
+            } else {
+                cosmic::widget::space::vertical()
+                    .height(Length::Fixed(0.0))
+                    .into()
+            };
+            return self.core.applet.autosize_window(empty).into();
         }
 
         let button = self
@@ -539,5 +655,12 @@ mod tests {
                 closing: false
             }
         );
+    }
+
+    #[test]
+    fn an_empty_panel_collapses_only_its_major_axis() {
+        assert_eq!(panel_surface_size(true, true, (32, 28)), (1, 28));
+        assert_eq!(panel_surface_size(true, false, (32, 28)), (32, 1));
+        assert_eq!(panel_surface_size(false, true, (32, 28)), (32, 28));
     }
 }

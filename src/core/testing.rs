@@ -26,7 +26,6 @@ pub fn item(id: &str, seq: u64) -> TrayItem {
         title: id.to_owned(),
         category: Category::ApplicationStatus,
         status: ItemStatus::Active,
-        item_is_menu: false,
         menu_path: None,
         tooltip: None,
         icon: std::sync::Arc::new(IconSource::default()),

@@ -50,7 +50,7 @@
         {
           "type": "git",
           "url": "https://github.com/marcelogomes90/cosmic-ext-applet-status-hub.git",
-          "tag": "v1.0.1"
+          "tag": "v1.0.2"
         },
         {
           "type": "file",

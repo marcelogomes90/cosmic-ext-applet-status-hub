@@ -15,6 +15,7 @@ pub enum MenuBehaviour {
     Broken,
     Empty,
     Submenu,
+    SlowAnnouncement,
 }
 
 #[derive(Debug, Default)]
@@ -82,7 +83,7 @@ impl FakeMenu {
                 ],
                 vec![child(5, &[("label", "Nested".into())])],
             )],
-            MenuBehaviour::Normal => vec![
+            MenuBehaviour::Normal | MenuBehaviour::SlowAnnouncement => vec![
                 child(1, &[("label", "Open".into())]),
                 child(2, &[("type", "separator".into())]),
                 child(3, &[("label", "Quit".into())]),
@@ -118,7 +119,14 @@ impl FakeMenu {
     }
 
     async fn about_to_show(&self, _id: i32) -> bool {
-        self.0.lock().await.about_to_show_calls += 1;
+        let slow = {
+            let mut state = self.0.lock().await;
+            state.about_to_show_calls += 1;
+            state.behaviour == MenuBehaviour::SlowAnnouncement
+        };
+        if slow {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
         false
     }
 
