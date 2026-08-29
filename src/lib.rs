@@ -1,5 +1,6 @@
 pub mod applet;
 pub mod core;
+pub mod i18n;
 
 #[cfg(feature = "testkit")]
 pub mod testkit;

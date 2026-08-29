@@ -62,3 +62,12 @@ fn stream(handle: CoreHandle) -> impl Stream<Item = Message> + Send + 'static {
         },
     )
 }
+
+pub fn pins() -> Subscription<Message> {
+    cosmic::cosmic_config::config_subscription::<_, crate::applet::pins::Pins>(
+        "cosmic-status-hub-pins",
+        crate::APP_ID.into(),
+        crate::applet::pins::CONFIG_VERSION,
+    )
+    .map(|update| Message::PinsChanged(update.config))
+}

@@ -245,6 +245,29 @@ pub struct TraySnapshot {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_label_prefers_a_tooltip_title() {
+        let mut item = crate::core::testing::item("slack", 1);
+        item.title = "Slack".to_owned();
+        item.tooltip = Some(ToolTip {
+            icon_name: String::new(),
+            icon_pixmap: Vec::new(),
+            title: "you have a notification".to_owned(),
+            description: String::new(),
+        });
+
+        assert_eq!(item.label(), "you have a notification");
+    }
+
+    #[test]
+    fn a_label_falls_back_past_an_empty_title() {
+        let mut item = crate::core::testing::item("slack", 1);
+        item.title = String::new();
+        item.id = "slack-client".to_owned();
+
+        assert_eq!(item.label(), "slack-client");
+    }
+
     use super::*;
 
     #[test]

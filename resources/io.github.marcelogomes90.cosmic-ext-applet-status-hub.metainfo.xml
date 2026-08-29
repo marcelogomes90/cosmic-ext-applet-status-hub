@@ -10,7 +10,7 @@
   <name>Status Hub</name>
   <summary>Application tray items, gathered behind a single panel button</summary>
   <description>
-    <p>Status Hub is a StatusNotifierItem tray for the COSMIC desktop. It adds a single chevron button to the panel, pointing at wherever its popup will appear and flipping while the popup is open. Clicking it opens a compact popup holding the tray items, wrapping them onto additional rows when there are many. Nothing else is added to the panel, and the popup is a tray rather than a settings screen.</p>
+    <p>Status Hub is a StatusNotifierItem tray for the COSMIC desktop. It adds a hub button to the panel; clicking it opens a compact popup holding the tray items and wraps them onto additional rows when there are many. Items reached for often can be pinned beside the hub so they stay one click away. A popup item's menu stays in the same card behind a divider, while a pinned item's menu is anchored to its panel slot.</p>
     <p>It is an independent implementation written from the StatusNotifierItem and DBusMenu specifications. It is not a fork of COSMIC's Status Area, and it is built to run alongside it.</p>
     <p>The tray is the part of a desktop most exposed to badly behaved applications: they hang, they exit without warning, they answer with the wrong types, and they restart under a new bus name a millisecond after the old one vanished. Status Hub is organised around not letting any of that become your problem:</p>
     <ul>
@@ -24,19 +24,19 @@
   <screenshots>
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/tray-popup.png</image>
-      <caption>Tray items gathered in the popup below the panel chevron</caption>
+      <caption>Tray items gathered in the popup, under a header that is always there</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu.png</image>
-      <caption>An application's tray menu opened from the popup</caption>
+      <caption>An application's tray menu, opened from the popup</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-compact.png</image>
-      <caption>A shorter tray menu with a highlighted entry</caption>
+      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/settings.png</image>
+      <caption>The settings view, where any item can be pinned to the panel</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-light.png</image>
-      <caption>The same menu following a light COSMIC theme</caption>
+      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/pinned-item-menu.png</image>
+      <caption>A pinned item's menu, opened straight from the panel</caption>
     </screenshot>
   </screenshots>
   <launchable type="desktop-id">io.github.marcelogomes90.cosmic-ext-applet-status-hub.desktop</launchable>
@@ -69,6 +69,20 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.1.0" date="2026-08-29">
+      <description>
+        <p>Items can be pinned to the panel, the popup gained a settings view, and the interface is available in ten languages.</p>
+        <ul>
+          <li>Pin any tray item to the panel, where it sits beside the hub button and stays one click away. Pins are remembered between sessions, survive an application restarting under a new bus name, and are kept in step across every panel.</li>
+          <li>Adds a header to the popup, with a settings view behind it listing every item and a switch for pinning it. Choices are applied when they are saved and discarded if the popup is dismissed, so the panel never shifts while they are being made.</li>
+          <li>Replaces the panel chevron with a button that no longer changes with the popup state, and keeps it at the end of the applet that faces away from the screen, so pinning an item does not move it.</li>
+          <li>Keeps a popup item's menu in the same card behind a divider, while a menu opened from a pinned item is anchored to that item's own panel slot.</li>
+          <li>Prefers the icon theme over the icon file an application ships alongside itself, so the tray follows the theme where one is available.</li>
+          <li>Shows the panel button even when the tray is empty, so the settings view can always be reached, and centres an explanatory notice in the popup.</li>
+          <li>Translated interface in English, Brazilian Portuguese, Dutch, French, German, Italian, Russian, Simplified Chinese, Spanish, and Ukrainian.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.0.2" date="2026-08-27">
       <description>
         <p>Left click brings the application to the front again, and the tray follows the usual mouse controls.</p>

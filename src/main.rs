@@ -2,6 +2,7 @@ use cosmic_status_hub::core::{self, MemoryOrderStore};
 
 fn main() -> cosmic::iced::Result {
     cosmic_status_hub::init_tracing();
+    cosmic_status_hub::i18n::init();
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         "starting cosmic-status-hub"

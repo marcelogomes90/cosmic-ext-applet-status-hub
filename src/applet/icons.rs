@@ -115,12 +115,8 @@ fn build(options: &IconOptions, size: u16) -> Built {
     }
 
     if let Some(name) = &options.name {
-        if let Some(path) = options
-            .theme_path
-            .as_deref()
-            .and_then(|root| lookup_published(name, root, size))
-        {
-            let source = format!("published name {name} -> {}", path.display());
+        if let Some(path) = lookup(name, size) {
+            let source = format!("name {name} -> {}", path.display());
             return Built {
                 handle: handle_for(path, name),
                 source,
@@ -128,8 +124,12 @@ fn build(options: &IconOptions, size: u16) -> Built {
             };
         }
 
-        if let Some(path) = lookup(name, size) {
-            let source = format!("name {name} -> {}", path.display());
+        if let Some(path) = options
+            .theme_path
+            .as_deref()
+            .and_then(|root| lookup_published(name, root, size))
+        {
+            let source = format!("published name {name} -> {}", path.display());
             return Built {
                 handle: handle_for(path, name),
                 source,

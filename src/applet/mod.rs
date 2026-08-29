@@ -1,6 +1,7 @@
 pub mod icons;
 pub mod menu_view;
 pub mod message;
+pub mod pins;
 pub mod popup;
 pub mod subscription;
 
@@ -10,9 +11,12 @@ use cosmic::applet::token::subscription::{
     TokenRequest, TokenUpdate, activation_token_subscription,
 };
 use cosmic::cctk::sctk::reexports::calloop;
+use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit};
 use cosmic::iced::mouse::Interaction;
+use cosmic::iced::platform_specific::runtime::wayland::popup::SctkPositioner;
 use cosmic::iced::platform_specific::shell::commands::popup::destroy_popup;
 use cosmic::iced::{Length, Subscription, window};
+use cosmic::widget::button::Catalog as _;
 use cosmic::widget::{icon, mouse_area, text};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -26,6 +30,7 @@ use crate::core::icons::IconKind;
 use crate::core::menu::MenuModel;
 use crate::core::model::{ItemAddress, TraySnapshot, WatcherState};
 use crate::core::{CoreCommand, CoreHandle};
+use crate::fl;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum PopupState {
@@ -37,14 +42,36 @@ enum PopupState {
     },
 }
 
-fn reconcile_surface_closed(id: window::Id, state: &mut PopupState) -> bool {
-    match *state {
-        PopupState::Open { tray, .. } if tray == id => {
-            *state = PopupState::Closed;
-            true
-        }
-        _ => false,
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum PopupBody {
+    #[default]
+    Items,
+    Settings,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MenuOrigin {
+    Hub,
+    Panel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ClosedSurface {
+    Unknown,
+    Tray,
+}
+
+fn reconcile_surface_closed(id: window::Id, state: &mut PopupState) -> ClosedSurface {
+    let PopupState::Open { tray, .. } = *state else {
+        return ClosedSurface::Unknown;
+    };
+
+    if tray == id {
+        *state = PopupState::Closed;
+        return ClosedSurface::Tray;
     }
+
+    ClosedSurface::Unknown
 }
 
 #[derive(Clone, Debug)]
@@ -57,14 +84,62 @@ enum PendingTokenAction {
     },
 }
 
-fn panel_surface_size(items_empty: bool, horizontal: bool, button_size: (u16, u16)) -> (u16, u16) {
-    if !items_empty {
-        return button_size;
+fn detect_wing(panel: &str) -> popup::Wing {
+    use cosmic::cosmic_config::{Config, ConfigGet};
+
+    let Ok(config) = Config::new(&format!("com.system76.CosmicPanel.{panel}"), 1) else {
+        return popup::Wing::default();
+    };
+
+    if let Ok(Some((start, end))) =
+        config.get::<Option<(Vec<String>, Vec<String>)>>("plugins_wings")
+    {
+        if start.iter().any(|plugin| plugin == APP_ID) {
+            return popup::Wing::Start;
+        }
+        if end.iter().any(|plugin| plugin == APP_ID) {
+            return popup::Wing::End;
+        }
     }
-    if horizontal {
-        (1, button_size.1)
-    } else {
-        (button_size.0, 1)
+
+    if let Ok(Some(center)) = config.get::<Option<Vec<String>>>("plugins_center")
+        && center.iter().any(|plugin| plugin == APP_ID)
+    {
+        return popup::Wing::Center;
+    }
+
+    popup::Wing::default()
+}
+
+fn accent_icon_style(
+    mut style: cosmic::widget::button::Style,
+    theme: &cosmic::Theme,
+) -> cosmic::widget::button::Style {
+    style.icon_color = Some(theme.cosmic().accent.base.into());
+    style
+}
+
+fn accent_icon_button() -> cosmic::theme::Button {
+    cosmic::theme::Button::Custom {
+        active: Box::new(|focused, theme| {
+            accent_icon_style(
+                theme.active(focused, false, &cosmic::theme::Button::Icon),
+                theme,
+            )
+        }),
+        disabled: Box::new(|theme| theme.disabled(&cosmic::theme::Button::Icon)),
+        hovered: Box::new(|focused, theme| {
+            accent_icon_style(
+                theme.hovered(focused, false, &cosmic::theme::Button::Icon),
+                theme,
+            )
+        }),
+        pressed: Box::new(|focused, theme| {
+            accent_icon_style(
+                theme.pressed(focused, false, &cosmic::theme::Button::Icon),
+                theme,
+            )
+        }),
     }
 }
 
@@ -74,7 +149,14 @@ pub struct StatusHub {
     snapshot: Arc<TraySnapshot>,
     icons: RefCell<IconCache>,
     popup_state: PopupState,
+    body: PopupBody,
+    pins: pins::Pins,
+    draft: Option<pins::Pins>,
+    wing: popup::Wing,
+    pin_store: pins::PinStore,
     menu: Option<Arc<MenuModel>>,
+    menu_origin: MenuOrigin,
+    panel_menu: Option<window::Id>,
     expanded: Vec<i32>,
     pending_menu: Option<ItemAddress>,
     token_tx: Option<calloop::channel::Sender<TokenRequest>>,
@@ -98,10 +180,6 @@ impl StatusHub {
         self.core.applet.suggested_size(true).0
     }
 
-    fn tray_padding() -> u16 {
-        cosmic::theme::spacing().space_xxxs
-    }
-
     fn button_size(&self) -> (u16, u16) {
         let (icon_width, icon_height) = self.core.applet.suggested_size(true);
         let (major_padding, minor_padding) = self.core.applet.suggested_padding(true);
@@ -119,13 +197,33 @@ impl StatusHub {
 
     fn tray_geometry(&self) -> popup::GridGeometry {
         let (item_width, item_height) = self.button_size();
+        let (_, popup_items) = self.partition_items(&self.pins);
 
         popup::GridGeometry::calculate(
-            self.snapshot.items.len(),
+            popup_items.len(),
             u32::from(item_width),
             u32::from(item_height),
             self.core.applet.spacing,
-            u32::from(Self::tray_padding()),
+            u32::from(popup::CONTENT_PADDING),
+            u32::from(popup::HEADER_PADDING),
+        )
+    }
+
+    fn partition_items(
+        &self,
+        pins: &pins::Pins,
+    ) -> (
+        Vec<&crate::core::model::TrayItem>,
+        Vec<&crate::core::model::TrayItem>,
+    ) {
+        pins::partition_for_panel(
+            &self.snapshot.items,
+            pins,
+            popup::panel_item_capacity(
+                self.core.applet.suggested_bounds,
+                self.button_size(),
+                self.core.applet.is_horizontal(),
+            ),
         )
     }
 
@@ -138,7 +236,11 @@ impl StatusHub {
             .cloned();
 
         let button = match handle {
-            Some(handle) => self.icon_button(handle, size),
+            Some(handle) => self
+                .core
+                .applet
+                .button_from_element(Self::icon_glyph(handle, size), true)
+                .force_enabled(true),
             None => self
                 .core
                 .applet
@@ -163,15 +265,11 @@ impl StatusHub {
         area.into()
     }
 
-    fn icon_button<'a>(
-        &self,
-        handle: icon::Handle,
-        size: u16,
-    ) -> cosmic::widget::Button<'a, Message> {
+    fn icon_glyph<'a>(handle: icon::Handle, size: u16) -> Element<'a, Message> {
         let size = f32::from(size);
         let symbolic = handle.symbolic;
 
-        let glyph = cosmic::widget::icon(handle)
+        cosmic::widget::icon(handle)
             .class(if symbolic {
                 cosmic::theme::Svg::Custom(std::rc::Rc::new(|theme: &cosmic::Theme| {
                     cosmic::iced::widget::svg::Style {
@@ -182,12 +280,8 @@ impl StatusHub {
                 cosmic::theme::Svg::default()
             })
             .width(Length::Fixed(size))
-            .height(Length::Fixed(size));
-
-        self.core
-            .applet
-            .button_from_element(glyph, true)
-            .force_enabled(true)
+            .height(Length::Fixed(size))
+            .into()
     }
 
     fn is_selected(&self, address: &ItemAddress) -> bool {
@@ -198,14 +292,98 @@ impl StatusHub {
                 .is_some_and(|menu| &menu.owner == address)
     }
 
+    fn hub_layout(&self) -> popup::HubLayout {
+        let body = match self.body {
+            PopupBody::Items => self.items_height(),
+            PopupBody::Settings => popup::settings_body_height(
+                self.snapshot.items.len(),
+                popup::SETTINGS_ROW,
+                cosmic::theme::spacing().space_xxs,
+                popup::HEADER_PADDING,
+            ),
+        };
+
+        let header = popup::header_height(popup::HEADER_CONTROL, popup::HEADER_PADDING);
+        let separator = popup::separator_height();
+        if self.menu.is_some() && self.menu_origin == MenuOrigin::Hub {
+            popup::HubLayout::with_menu(header, separator, body, popup::menu_separator_height())
+        } else {
+            popup::HubLayout::new(header, separator, body)
+        }
+    }
+
+    fn items_height(&self) -> u16 {
+        let geometry = self.tray_geometry();
+        let (_, popup_items) = self.partition_items(&self.pins);
+
+        if popup_items.is_empty() {
+            popup::notice_height(geometry.height)
+        } else {
+            geometry.height
+        }
+    }
+
+    fn header(&self) -> Element<'_, Message> {
+        let showing_settings = self.body == PopupBody::Settings;
+        let control = f32::from(popup::HEADER_CONTROL);
+
+        let action: Element<'_, Message> = if showing_settings {
+            cosmic::widget::button::text(fl!("save"))
+                .height(Length::Fixed(control))
+                .on_press(Message::SaveSettings)
+                .into()
+        } else {
+            let settings = cosmic::widget::button::icon(
+                icon::from_name(popup::SETTINGS_ICON)
+                    .size(popup::HEADER_ICON)
+                    .symbolic(true),
+            )
+            .class(accent_icon_button())
+            .width(Length::Fixed(control))
+            .height(Length::Fixed(control));
+            if self.snapshot.items.is_empty() {
+                settings.into()
+            } else {
+                settings.on_press(Message::OpenSettings).into()
+            }
+        };
+
+        let title = if showing_settings {
+            fl!("settings")
+        } else {
+            fl!("app-title")
+        };
+
+        popup::header(
+            title,
+            action,
+            popup::header_height(popup::HEADER_CONTROL, popup::HEADER_PADDING),
+            popup::HEADER_PADDING,
+            self.menu.is_some().then_some(Message::DismissMenu),
+        )
+    }
+
     fn popup_body(&self) -> Element<'_, Message> {
-        if self.snapshot.items.is_empty() {
-            let message = match &self.snapshot.watcher {
-                WatcherState::Unavailable(_) => "No status notifier watcher is running",
-                WatcherState::Connecting => "Connecting…",
-                WatcherState::Connected => "No tray items",
+        match self.body {
+            PopupBody::Items => self.items_body(),
+            PopupBody::Settings => self.settings_body(),
+        }
+    }
+
+    fn items_body(&self) -> Element<'_, Message> {
+        let (_, popup_items) = self.partition_items(&self.pins);
+
+        if popup_items.is_empty() {
+            let message = if self.snapshot.items.is_empty() {
+                match &self.snapshot.watcher {
+                    WatcherState::Unavailable(_) => fl!("no-watcher"),
+                    WatcherState::Connecting => fl!("connecting"),
+                    WatcherState::Connected => fl!("empty-state"),
+                }
+            } else {
+                fl!("empty-state")
             };
-            return cosmic::applet::padded_control(text::body(message)).into();
+            return popup::notice(message, self.items_height());
         }
 
         self.icons
@@ -213,12 +391,75 @@ impl StatusHub {
             .refresh(&self.snapshot, self.item_icon_size(), false);
         let spacing = u16::try_from(self.core.applet.spacing).unwrap_or(0);
         popup::item_grid(
+            popup_items.into_iter().map(|item| self.item_button(item)),
+            spacing,
+            self.tray_geometry().height,
+        )
+    }
+
+    fn settings_body(&self) -> Element<'_, Message> {
+        self.icons
+            .borrow_mut()
+            .refresh(&self.snapshot, self.item_icon_size(), false);
+        let spacing = cosmic::theme::spacing().space_xxs;
+
+        popup::settings_list(
             self.snapshot
                 .items
                 .iter()
-                .map(|item| self.item_button(item)),
+                .map(|item| self.settings_row(item)),
+            popup::settings_body_height(
+                self.snapshot.items.len(),
+                popup::SETTINGS_ROW,
+                spacing,
+                popup::HEADER_PADDING,
+            ),
             spacing,
+            popup::HEADER_PADDING,
         )
+    }
+
+    fn settings_row<'a>(&'a self, item: &'a crate::core::model::TrayItem) -> Element<'a, Message> {
+        let spacing = cosmic::theme::spacing();
+        let key = item.key.clone();
+        let pinned = self
+            .draft
+            .as_ref()
+            .unwrap_or(&self.pins)
+            .contains(&item.key);
+
+        let label = text::body(item.label().to_owned())
+            .width(Length::Fill)
+            .ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(1)));
+
+        let size = self.item_icon_size().min(popup::SETTINGS_ROW);
+        let handle = self
+            .icons
+            .borrow()
+            .get(
+                &item.address,
+                item.generation,
+                IconKind::Primary,
+                self.item_icon_size(),
+            )
+            .cloned()
+            .unwrap_or_else(|| icon::from_name("application-default").size(size).handle());
+
+        let row = cosmic::widget::row::with_children(vec![
+            Self::icon_glyph(handle, size),
+            label.into(),
+            cosmic::widget::toggler(pinned)
+                .on_toggle(move |_| Message::TogglePin(key.clone()))
+                .into(),
+        ])
+        .align_y(cosmic::iced::Alignment::Center)
+        .spacing(spacing.space_xs);
+
+        cosmic::widget::container(row)
+            .width(Length::Fill)
+            .height(Length::Fixed(f32::from(popup::SETTINGS_ROW)))
+            .align_y(cosmic::iced::Alignment::Center)
+            .into()
     }
 
     fn request_token(&mut self, action: PendingTokenAction) -> Task<Message> {
@@ -311,20 +552,35 @@ impl StatusHub {
 
     fn on_snapshot(&mut self, snapshot: Arc<TraySnapshot>) -> Task<Message> {
         let emptied = !self.snapshot.items.is_empty() && snapshot.items.is_empty();
-        let visibility_changed = self.snapshot.items.is_empty() != snapshot.items.is_empty();
+        let slots_before = self.panel_slots();
+        let active_menu = self
+            .menu
+            .as_ref()
+            .map(|menu| menu.owner.clone())
+            .or_else(|| self.pending_menu.clone());
         self.snapshot = snapshot;
 
         let icon_task = self.refresh_icons(false, true);
-        let resize_task = if visibility_changed {
-            self.resize_panel_surface()
+        let slots_changed = self.panel_slots() != slots_before;
+        let active_disappeared = active_menu.is_some_and(|address| {
+            !self
+                .snapshot
+                .items
+                .iter()
+                .any(|item| item.address == address)
+        });
+        let menu_task = if active_disappeared || (slots_changed && self.panel_menu.is_some()) {
+            self.forget_menu();
+            self.menu_origin = MenuOrigin::Hub;
+            self.close_panel_menu()
         } else {
             Task::none()
         };
 
         if emptied && self.popup_state != PopupState::Closed {
-            return Task::batch([icon_task, resize_task, self.close_popup(true)]);
+            return Task::batch([icon_task, menu_task, self.close_popup(true)]);
         }
-        Task::batch([icon_task, resize_task])
+        Task::batch([icon_task, menu_task])
     }
 
     fn complete_token_action(
@@ -355,6 +611,11 @@ impl StatusHub {
                         self.expanded.push(id);
                     }
                     Task::none()
+                } else if self.menu_origin == MenuOrigin::Panel {
+                    self.menu = None;
+                    self.expanded.clear();
+                    self.menu_origin = MenuOrigin::Hub;
+                    self.close_panel_menu()
                 } else {
                     self.close_popup(false)
                 }
@@ -362,8 +623,42 @@ impl StatusHub {
         }
     }
 
+    fn on_panel_menu(&mut self, menu: Option<Arc<MenuModel>>) -> Task<Message> {
+        let owner_changed = self
+            .menu
+            .as_ref()
+            .zip(menu.as_ref())
+            .is_some_and(|(old, new)| old.owner != new.owner);
+        if owner_changed || menu.is_none() {
+            self.expanded.clear();
+        }
+
+        let slot = menu
+            .as_ref()
+            .and_then(|model| self.panel_slot_of(&model.owner));
+        let showing = self.panel_menu.is_some();
+        self.menu = menu;
+
+        let Some(slot) = slot else {
+            self.menu = None;
+            self.menu_origin = MenuOrigin::Hub;
+            return self.close_panel_menu();
+        };
+
+        if showing && !owner_changed {
+            return cosmic::task::message(Message::Relayout);
+        }
+
+        let closed = self.close_panel_menu();
+        closed.chain(self.open_panel_menu(slot))
+    }
+
     fn on_menu(&mut self, menu: Option<Arc<MenuModel>>) -> Task<Message> {
         self.pending_menu = None;
+
+        if self.menu_origin == MenuOrigin::Panel {
+            return self.on_panel_menu(menu);
+        }
 
         if self.popup_state == PopupState::Closed {
             if menu.is_some() {
@@ -382,8 +677,8 @@ impl StatusHub {
         if owner_changed || menu.is_none() {
             self.expanded.clear();
         }
-        self.menu = menu;
 
+        self.menu = menu;
         cosmic::task::message(Message::Relayout)
     }
 
@@ -410,35 +705,172 @@ impl StatusHub {
         }
     }
 
-    fn resize_panel_surface(&self) -> Task<Message> {
-        let Some(id) = self.core.main_window_id() else {
+    fn on_toggle_popup(&mut self) -> Task<Message> {
+        if self.popup_state != PopupState::Closed {
+            return self.close_popup(true);
+        }
+
+        let closed_panel_menu = self.close_panel_menu();
+        self.menu_origin = MenuOrigin::Hub;
+        self.menu = None;
+        self.pending_menu = None;
+        self.expanded.clear();
+
+        let popup = window::Id::unique();
+        self.body = PopupBody::Items;
+        self.popup_state = PopupState::Open {
+            tray: popup,
+            closing: false,
+        };
+
+        let parent = self
+            .core
+            .main_window_id()
+            .expect("applet has a main window");
+        closed_panel_menu.chain(Self::open_popup_surface(parent, popup))
+    }
+
+    fn on_surface_closed(&mut self, id: window::Id) -> Task<Message> {
+        if self.panel_menu == Some(id) {
+            self.panel_menu = None;
+            self.menu_origin = MenuOrigin::Hub;
+            self.forget_menu();
+            return Task::none();
+        }
+
+        match reconcile_surface_closed(id, &mut self.popup_state) {
+            ClosedSurface::Tray => {
+                self.body = PopupBody::Items;
+                self.draft = None;
+                self.forget_menu();
+            }
+            ClosedSurface::Unknown => {}
+        }
+        Task::none()
+    }
+
+    fn on_open_settings(&mut self) -> Task<Message> {
+        self.body = PopupBody::Settings;
+        self.draft = Some(self.pins.clone());
+        self.forget_menu();
+        cosmic::task::message(Message::Relayout)
+    }
+
+    fn on_save_settings(&mut self) -> Task<Message> {
+        self.body = PopupBody::Items;
+        let draft = self.draft.take();
+        self.forget_menu();
+
+        if let Some(draft) = draft
+            && draft != self.pins
+        {
+            self.pin_store.save(&draft);
+            self.pins = draft;
+        }
+
+        self.close_popup(true)
+    }
+
+    fn forget_menu(&mut self) {
+        self.expanded.clear();
+        self.menu = None;
+        self.pending_menu = None;
+        self.tray.send(CoreCommand::CloseMenu);
+    }
+
+    fn close_panel_menu(&mut self) -> Task<Message> {
+        match self.panel_menu.take() {
+            Some(menu) => destroy_popup(menu),
+            None => Task::none(),
+        }
+    }
+
+    fn open_panel_menu(&mut self, slot: usize) -> Task<Message> {
+        let Some(parent) = self.core.main_window_id() else {
             return Task::none();
         };
-        let (width, height) = panel_surface_size(
-            self.snapshot.items.is_empty(),
-            self.core.applet.is_horizontal(),
-            self.button_size(),
-        );
 
-        window::resize(
+        let menu = window::Id::unique();
+        self.panel_menu = Some(menu);
+
+        cosmic::surface::surface_task(cosmic::surface::action::app_popup::<Self>(
+            |_| cosmic::surface::action::LiveSettings::default(),
+            move |app| {
+                let button = app.button_size();
+                let horizontal = app.core.applet.is_horizontal();
+                let mut settings = app.core.applet.get_popup_settings(
+                    parent,
+                    menu,
+                    Some((u32::from(popup::SURFACE_WIDTH), 1)),
+                    None,
+                    None,
+                );
+                settings.positioner.anchor_rect = popup::panel_slot_rect(slot, button, horizontal);
+                settings.positioner.size_limits = popup::size_limits();
+                settings
+            },
+            None,
+        ))
+    }
+
+    fn panel_slot_of(&self, address: &ItemAddress) -> Option<usize> {
+        let (pinned, _) = self.partition_items(&self.pins);
+        pinned
+            .iter()
+            .position(|item| &item.address == address)
+            .map(|index| popup::pinned_slot(self.wing, index))
+    }
+
+    fn panel_slots(&self) -> usize {
+        let (panel, _) = self.partition_items(&self.pins);
+        panel.len() + 1
+    }
+
+    fn apply_pins(&mut self, pins: pins::Pins) -> Task<Message> {
+        if self.pins == pins {
+            return Task::none();
+        }
+
+        self.pins = pins;
+
+        let close_menu = if self.menu.is_some() || self.pending_menu.is_some() {
+            self.forget_menu();
+            self.menu_origin = MenuOrigin::Hub;
+            self.close_panel_menu()
+        } else {
+            Task::none()
+        };
+        close_menu.chain(cosmic::task::message(Message::Relayout))
+    }
+
+    fn hub_positioner(&self, parent: window::Id, id: window::Id) -> SctkPositioner {
+        let height = self.hub_layout().height();
+        let mut settings = self.core.applet.get_popup_settings(
+            parent,
             id,
-            cosmic::iced::Size::new(f32::from(width), f32::from(height)),
-        )
+            Some((u32::from(popup::SURFACE_WIDTH), u32::from(height))),
+            None,
+            None,
+        );
+        settings.positioner.anchor_rect = popup::panel_slot_rect(
+            popup::hub_slot(self.wing, self.panel_slots()),
+            self.button_size(),
+            self.core.applet.is_horizontal(),
+        );
+        settings.positioner.reactive = false;
+        settings.positioner.size_limits = popup::size_limits();
+        settings.positioner
     }
 
     fn open_popup_surface(parent: window::Id, id: window::Id) -> Task<Message> {
         cosmic::surface::surface_task(cosmic::surface::action::app_popup::<Self>(
             |_| cosmic::surface::action::LiveSettings::default(),
             move |app| {
-                let geometry = app.tray_geometry();
-                let mut settings = app.core.applet.get_popup_settings(
-                    parent,
-                    id,
-                    Some((u32::from(geometry.width), u32::from(geometry.height))),
-                    None,
-                    None,
-                );
-                settings.positioner.size_limits = popup::size_limits();
+                let mut settings = app
+                    .core
+                    .applet
+                    .get_popup_settings(parent, id, None, None, None);
+                settings.positioner = app.hub_positioner(parent, id);
                 settings
             },
             None,
@@ -455,6 +887,10 @@ impl cosmic::Application for StatusHub {
 
     fn init(core: Core, tray: Self::Flags) -> (Self, Task<Message>) {
         let snapshot = tray.snapshot();
+        let wing = detect_wing(&core.applet.panel_type.to_string());
+        tracing::info!(?wing, "panel placement");
+        let pin_store = pins::PinStore::open(APP_ID);
+        let pins = pin_store.load();
         (
             Self {
                 core,
@@ -462,7 +898,14 @@ impl cosmic::Application for StatusHub {
                 snapshot,
                 icons: RefCell::new(IconCache::default()),
                 popup_state: PopupState::Closed,
+                body: PopupBody::Items,
+                pins,
+                draft: None,
+                wing,
+                pin_store,
                 menu: None,
+                menu_origin: MenuOrigin::Hub,
+                panel_menu: None,
                 expanded: Vec::new(),
                 pending_menu: None,
                 token_tx: None,
@@ -492,6 +935,7 @@ impl cosmic::Application for StatusHub {
         Subscription::batch([
             subscription::snapshots(&self.tray),
             subscription::menus(&self.tray),
+            subscription::pins(),
             activation_token_subscription(0).map(Message::Token),
         ])
     }
@@ -502,32 +946,9 @@ impl cosmic::Application for StatusHub {
 
             Message::Snapshot(snapshot) => self.on_snapshot(snapshot),
 
-            Message::TogglePopup => {
-                if self.popup_state != PopupState::Closed {
-                    return self.close_popup(true);
-                }
+            Message::TogglePopup => self.on_toggle_popup(),
 
-                let popup = window::Id::unique();
-                self.popup_state = PopupState::Open {
-                    tray: popup,
-                    closing: false,
-                };
-                let parent = self
-                    .core
-                    .main_window_id()
-                    .expect("applet has a main window");
-                Self::open_popup_surface(parent, popup)
-            }
-
-            Message::SurfaceClosed(id) => {
-                if reconcile_surface_closed(id, &mut self.popup_state) {
-                    self.expanded.clear();
-                    self.menu = None;
-                    self.pending_menu = None;
-                    self.tray.send(CoreCommand::CloseMenu);
-                }
-                Task::none()
-            }
+            Message::SurfaceClosed(id) => self.on_surface_closed(id),
 
             Message::Activate(address) => {
                 tracing::info!(item = %address, "primary click");
@@ -540,6 +961,11 @@ impl cosmic::Application for StatusHub {
             }
 
             Message::ContextMenu(address) => {
+                self.menu_origin = if self.panel_slot_of(&address).is_some() {
+                    MenuOrigin::Panel
+                } else {
+                    MenuOrigin::Hub
+                };
                 self.pending_menu = self
                     .snapshot
                     .items
@@ -569,48 +995,106 @@ impl cosmic::Application for StatusHub {
                 None => Task::none(),
             },
 
+            Message::OpenSettings => self.on_open_settings(),
+
+            Message::SaveSettings => self.on_save_settings(),
+
+            Message::PinsChanged(pins) => self.apply_pins(pins),
+
+            Message::DismissMenu => {
+                if self.menu.is_none() {
+                    return Task::none();
+                }
+                self.forget_menu();
+                cosmic::task::message(Message::Relayout)
+            }
+
+            Message::TogglePin(key) => {
+                let Some(draft) = self.draft.as_mut() else {
+                    return Task::none();
+                };
+                if !draft.toggle(&key) {
+                    return Task::none();
+                }
+                cosmic::task::message(Message::Relayout)
+            }
+
             Message::Token(update) => self.on_token(update),
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        if self.snapshot.items.is_empty() {
-            let empty: Element<'_, Message> = if self.core.applet.is_horizontal() {
-                cosmic::widget::space::horizontal()
-                    .width(Length::Fixed(0.0))
-                    .into()
-            } else {
-                cosmic::widget::space::vertical()
-                    .height(Length::Fixed(0.0))
-                    .into()
-            };
-            return self.core.applet.autosize_window(empty).into();
-        }
+        let horizontal = self.core.applet.is_horizontal();
 
-        let button = self
+        let hub = self
             .core
             .applet
-            .icon_button(popup::panel_icon(
-                self.core.applet.anchor,
-                self.popup_state != PopupState::Closed,
-            ))
+            .icon_button(popup::PANEL_ICON)
             .on_press(Message::TogglePopup);
 
-        self.core.applet.autosize_window(button).into()
+        let (pinned, _) = self.partition_items(&self.pins);
+        if pinned.is_empty() {
+            return popup::panel_surface(hub, self.core.applet.suggested_bounds, horizontal);
+        }
+
+        self.icons
+            .borrow_mut()
+            .refresh(&self.snapshot, self.item_icon_size(), false);
+
+        let hub: Element<'_, Message> = hub.into();
+        let buttons = pinned.into_iter().map(|item| self.item_button(item));
+        let slots: Vec<Element<'_, Message>> = if popup::hub_leads(self.wing) {
+            std::iter::once(hub).chain(buttons).collect()
+        } else {
+            buttons.chain(std::iter::once(hub)).collect()
+        };
+
+        let strip: Element<'_, Message> = if horizontal {
+            cosmic::widget::row::with_children(slots)
+                .align_y(cosmic::iced::Alignment::Center)
+                .into()
+        } else {
+            cosmic::widget::column::with_children(slots)
+                .align_x(cosmic::iced::Alignment::Center)
+                .into()
+        };
+
+        popup::panel_surface(strip, self.core.applet.suggested_bounds, horizontal)
     }
 
     fn view_window(&self, id: window::Id) -> Element<'_, Message> {
-        if matches!(self.popup_state, PopupState::Open { tray, .. } if tray == id) {
-            return popup::surface_container(
-                self.popup_body(),
-                self.menu
-                    .as_ref()
-                    .map(|menu| menu_view::view(menu, &self.expanded)),
-                self.tray_geometry(),
-                Self::tray_padding(),
+        if self.panel_menu == Some(id) {
+            return match self.menu.as_ref() {
+                Some(model) => popup::menu_surface(menu_view::view(model, &self.expanded)),
+                None => text::body("").into(),
+            };
+        }
+
+        let PopupState::Open { tray, .. } = self.popup_state else {
+            return text::body("").into();
+        };
+
+        if tray == id {
+            let body = if self.menu.is_some() {
+                mouse_area(self.popup_body())
+                    .on_press(Message::DismissMenu)
+                    .into()
+            } else {
+                self.popup_body()
+            };
+            let menu = self
+                .menu
+                .as_ref()
+                .map(|model| menu_view::view(model, &self.expanded));
+            return popup::hub_surface(
+                self.header(),
+                body,
+                menu,
+                self.hub_layout(),
                 self.core.applet.anchor,
             );
         }
+
         text::body("").into()
     }
 
@@ -627,40 +1111,34 @@ pub fn run(tray: CoreHandle) -> cosmic::iced::Result {
 mod tests {
     use super::*;
 
+    fn open(tray: window::Id) -> PopupState {
+        PopupState::Open {
+            tray,
+            closing: false,
+        }
+    }
+
     #[test]
     fn closing_the_popup_leaves_no_surface() {
-        let id = window::Id::unique();
-        let mut state = PopupState::Open {
-            tray: id,
-            closing: false,
-        };
+        let tray = window::Id::unique();
+        let mut state = open(tray);
 
-        assert!(reconcile_surface_closed(id, &mut state));
+        assert_eq!(
+            reconcile_surface_closed(tray, &mut state),
+            ClosedSurface::Tray
+        );
         assert_eq!(state, PopupState::Closed);
     }
 
     #[test]
     fn an_unrelated_surface_does_not_change_popup_state() {
-        let id = window::Id::unique();
-        let mut state = PopupState::Open {
-            tray: id,
-            closing: false,
-        };
+        let tray = window::Id::unique();
+        let mut state = open(tray);
 
-        assert!(!reconcile_surface_closed(window::Id::unique(), &mut state));
         assert_eq!(
-            state,
-            PopupState::Open {
-                tray: id,
-                closing: false
-            }
+            reconcile_surface_closed(window::Id::unique(), &mut state),
+            ClosedSurface::Unknown
         );
-    }
-
-    #[test]
-    fn an_empty_panel_collapses_only_its_major_axis() {
-        assert_eq!(panel_surface_size(true, true, (32, 28)), (1, 28));
-        assert_eq!(panel_surface_size(true, false, (32, 28)), (32, 1));
-        assert_eq!(panel_surface_size(false, true, (32, 28)), (32, 28));
+        assert_eq!(state, open(tray));
     }
 }

@@ -9,14 +9,21 @@ a single panel button.
 
 </div>
 
-The panel shows one icon. Clicking it opens a compact popup holding the tray items, wrapping them
-onto additional rows when there are many. Nothing else is added to the panel.
+The panel shows one button. Clicking it opens a compact popup holding the tray items, wrapping
+them onto additional rows when there are many. Items you reach for often can be pinned beside it,
+so they stay one click away.
 
-<img src="resources/screenshots/desktop.png" alt="Status Hub popup open on the COSMIC panel, with an application's tray menu expanded below it" />
+<img src="resources/screenshots/desktop.png" alt="Status Hub popup open on the COSMIC panel, showing pinned items beside the hub button" />
 
 ## Features
 
 - Collects every StatusNotifierItem on the session bus behind one panel button.
+- Pins the items you choose to the panel, remembered between sessions and kept in step across
+  every panel. Pinned items keep their mouse controls and their menu.
+- Keeps a popup item's menu in the same card, separated from the icons by a divider; menus opened
+  from pinned items are anchored to their panel slot.
+- Ships in English, Brazilian Portuguese, Dutch, French, German, Italian, Russian, Simplified
+  Chinese, Spanish, and Ukrainian.
 - Renders DBusMenu menus, including submenus, checkmarks, radio groups, separators, and menu
   icons.
 - Resolves icons from icon names, absolute paths, or raw pixmap bytes, with attention and
@@ -52,6 +59,24 @@ sudo just install      # /usr
 ```
 
 Then add **Status Hub** in Settings → Desktop → Panel → Applets.
+
+## Contributing
+
+[ARCHITECTURE.md](ARCHITECTURE.md) explains how the tray core, the lifecycle arbitration, and the
+applet fit together, and why the core carries no iced dependency. Read it before moving code across
+that boundary.
+
+```sh
+just verify   # fmt, clippy -D warnings, tests, and metadata validation
+```
+
+### Translating
+
+Translations are [Fluent](https://projectfluent.org) catalogues under `i18n/<locale>/status-hub.ftl`.
+To add a language, copy `i18n/en/status-hub.ftl` into a new locale directory and translate the
+values — the keys must stay as they are. A test asserts every catalogue carries exactly the same
+keys as the English one, so a drifting translation fails the build rather than shipping as a blank
+label.
 
 ## Licence
 

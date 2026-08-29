@@ -15,6 +15,7 @@
     "--device=dri",
     "--socket=session-bus",
     "--filesystem=xdg-config/cosmic:ro",
+    "--filesystem=xdg-config/cosmic/io.github.marcelogomes90.cosmic-ext-applet-status-hub:create",
     "--filesystem=host-os:ro",
     "--filesystem=/var/lib/flatpak/exports/share:ro",
     "--filesystem=~/.local/share/flatpak/exports/share:ro",
@@ -50,7 +51,7 @@
         {
           "type": "git",
           "url": "https://github.com/marcelogomes90/cosmic-ext-applet-status-hub.git",
-          "tag": "v1.0.2"
+          "tag": "v1.1.0"
         },
         {
           "type": "file",
