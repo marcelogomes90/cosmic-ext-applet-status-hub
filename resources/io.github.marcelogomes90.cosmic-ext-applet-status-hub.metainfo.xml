@@ -69,6 +69,11 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.2.1" date="2026-08-30">
+      <description>
+        <p>No user-visible change. Corrects a test that assumed a COSMIC icon theme is installed, which made the suite fail on a machine without one.</p>
+      </description>
+    </release>
     <release type="stable" version="1.2.0" date="2026-08-30">
       <description>
         <p>Icons an application publishes from inside its own sandbox now resolve, tray artwork is adapted to the panel it sits on, and the Flatpak asks for far fewer permissions.</p>
