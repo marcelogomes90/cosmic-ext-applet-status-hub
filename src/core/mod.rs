@@ -28,7 +28,9 @@ use crate::core::model::{
     Category, DiscoverySeq, Generation, IconSource, ItemAddress, ItemKey, ItemStatus, TraySnapshot,
     WatcherState,
 };
-use crate::core::proxies::{DBusMenuProxy, RawLayout, StatusNotifierItemProxy};
+use crate::core::proxies::{
+    DBusMenuProxy, IntrospectableProxy, RawLayout, StatusNotifierItemProxy,
+};
 use crate::core::registry::{Applied, Registry, ResolvedProps};
 use zbus::zvariant::OwnedObjectPath;
 
@@ -803,12 +805,7 @@ impl<S: OrderStore> Core<S> {
                     if let Some(token) = token
                         && let Ok(proxy) = item_proxy(&connection, &address).await
                     {
-                        let _ = with_timeout(
-                            ACTION_TIMEOUT,
-                            "ProvideXdgActivationToken",
-                            proxy.provide_xdg_activation_token(&token),
-                        )
-                        .await;
+                        offer_token(&proxy, &token).await;
                     }
                     let Ok(proxy) = menu_proxy(&connection, &address, menu_path).await else {
                         return;
@@ -873,12 +870,7 @@ impl<S: OrderStore> Core<S> {
 
         spawn_action(connection, address, move |proxy| async move {
             if let Some(token) = token {
-                let _ = with_timeout(
-                    ACTION_TIMEOUT,
-                    "ProvideXdgActivationToken",
-                    proxy.provide_xdg_activation_token(&token),
-                )
-                .await;
+                offer_token(&proxy, &token).await;
             }
             with_timeout(ACTION_TIMEOUT, "Activate", proxy.activate(0, 0)).await
         });
@@ -1115,6 +1107,7 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
         attention_icon_pixmap,
         overlay_icon_name,
         overlay_icon_pixmap,
+        introspection,
     ) = futures::join!(
         with_timeout(PROPERTY_TIMEOUT, "Id", proxy.id()),
         with_timeout(PROPERTY_TIMEOUT, "Title", proxy.title()),
@@ -1145,6 +1138,7 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
             "OverlayIconPixmap",
             proxy.overlay_icon_pixmap()
         ),
+        introspect(connection, address),
     );
 
     let failures: [Option<&CallError>; 13] = [
@@ -1177,6 +1171,7 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
             status: status.as_deref().map(ItemStatus::from).unwrap_or_default(),
             menu_path,
             tooltip: tooltip.ok(),
+            takes_activation_token: announces_activation_token(introspection.as_deref()),
             icon: Arc::new(IconSource {
                 icon_name: icon_name.unwrap_or_default(),
                 icon_pixmap: icon_pixmap.unwrap_or_default(),
@@ -1188,6 +1183,41 @@ async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> Resolv
             }),
         },
     })
+}
+
+async fn introspect(connection: &zbus::Connection, address: &ItemAddress) -> Option<String> {
+    let proxy = IntrospectableProxy::builder(connection)
+        .destination(address.service.clone())
+        .ok()?
+        .path(address.path.clone())
+        .ok()?
+        .build()
+        .await
+        .ok()?;
+
+    with_timeout(PROPERTY_TIMEOUT, "Introspect", proxy.introspect())
+        .await
+        .ok()
+}
+
+fn announces_activation_token(introspection: Option<&str>) -> bool {
+    introspection.is_some_and(|xml| xml.contains("ProvideXdgActivationToken"))
+}
+
+async fn offer_token(proxy: &StatusNotifierItemProxy<'_>, token: &str) {
+    if let Err(err) = with_timeout(
+        ACTION_TIMEOUT,
+        "ProvideXdgActivationToken",
+        proxy.provide_xdg_activation_token(token),
+    )
+    .await
+    {
+        tracing::debug!(
+            item = %proxy.inner().destination(),
+            error = %err,
+            "the item takes no activation token, so it cannot raise its own window"
+        );
+    }
 }
 
 fn spawn_action<F, Fut>(connection: &zbus::Connection, address: ItemAddress, action: F)
@@ -1261,6 +1291,42 @@ async fn sleep_until_opt(deadline: Option<Instant>) {
     match deadline {
         Some(deadline) => tokio::time::sleep_until(deadline.into()).await,
         None => std::future::pending().await,
+    }
+}
+
+#[cfg(test)]
+mod token_capability_tests {
+    use super::announces_activation_token;
+
+    const QT_ITEM: &str = r#"<node>
+  <interface name="org.kde.StatusNotifierItem">
+    <method name="Activate"><arg name="x" type="i" direction="in"/></method>
+    <method name="ProvideXdgActivationToken"><arg name="token" type="s" direction="in"/></method>
+  </interface>
+</node>"#;
+
+    const ELECTRON_ITEM: &str = r#"<node>
+  <interface name="org.kde.StatusNotifierItem">
+    <method name="Activate"><arg name="x" type="i" direction="in"/></method>
+    <method name="SecondaryActivate"><arg name="x" type="i" direction="in"/></method>
+  </interface>
+</node>"#;
+
+    #[test]
+    fn an_item_that_lists_the_method_is_left_to_raise_itself() {
+        assert!(announces_activation_token(Some(QT_ITEM)));
+    }
+
+    #[test]
+    fn an_item_without_the_method_needs_the_applet() {
+        assert!(!announces_activation_token(Some(ELECTRON_ITEM)));
+    }
+
+    #[test]
+    fn a_sandbox_that_hides_the_interface_is_treated_as_needing_the_applet() {
+        assert!(!announces_activation_token(Some("<node>\n</node>")));
+        assert!(!announces_activation_token(Some("")));
+        assert!(!announces_activation_token(None));
     }
 }
 

@@ -209,6 +209,7 @@ pub struct TrayItem {
     pub menu_path: Option<OwnedObjectPath>,
     pub tooltip: Option<ToolTip>,
     pub icon: Arc<IconSource>,
+    pub takes_activation_token: bool,
 }
 
 impl TrayItem {

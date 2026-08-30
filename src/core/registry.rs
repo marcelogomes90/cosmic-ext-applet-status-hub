@@ -20,6 +20,7 @@ pub struct ResolvedProps {
     pub menu_path: Option<OwnedObjectPath>,
     pub tooltip: Option<ToolTip>,
     pub icon: Arc<IconSource>,
+    pub takes_activation_token: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -299,6 +300,7 @@ impl Registry {
                 menu_path: entry.props.menu_path.clone(),
                 tooltip: entry.props.tooltip.clone(),
                 icon: entry.props.icon.clone(),
+                takes_activation_token: entry.props.takes_activation_token,
             })
             .collect();
 

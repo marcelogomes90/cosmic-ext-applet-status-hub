@@ -31,6 +31,22 @@ impl MenuModel {
         }
     }
 
+    pub fn find(&self, id: i32) -> Option<&MenuEntry> {
+        fn search(entries: &[MenuEntry], id: i32) -> Option<&MenuEntry> {
+            for entry in entries {
+                if entry.id == id {
+                    return Some(entry);
+                }
+                if let Some(found) = search(&entry.children, id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        search(&self.entries, id)
+    }
+
     pub fn is_empty(&self) -> bool {
         !self
             .entries
@@ -370,6 +386,32 @@ mod tests {
         assert_eq!(strip_mnemonics("my__file"), "my_file");
         assert_eq!(strip_mnemonics("nothing"), "nothing");
         assert_eq!(strip_mnemonics("trailing_"), "trailing");
+    }
+
+    #[test]
+    fn an_entry_is_found_however_deep_it_sits() {
+        let root = node(
+            0,
+            Props::new(),
+            vec![node(
+                1,
+                props(&[("children-display", "submenu".into())]),
+                vec![leaf(2, &[("label", "Nested".into())])],
+            )],
+        );
+        let model = MenuModel::from_layout(
+            crate::core::testing::address("org.example.App", ":1.1"),
+            Generation(1),
+            1,
+            &root,
+        );
+
+        assert_eq!(
+            model.find(2).map(|entry| entry.label.as_str()),
+            Some("Nested")
+        );
+        assert_eq!(model.find(1).map(|entry| entry.label.as_str()), Some(""));
+        assert!(model.find(99).is_none());
     }
 
     #[test]

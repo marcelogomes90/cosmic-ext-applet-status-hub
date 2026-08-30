@@ -29,5 +29,6 @@ pub fn item(id: &str, seq: u64) -> TrayItem {
         menu_path: None,
         tooltip: None,
         icon: std::sync::Arc::new(IconSource::default()),
+        takes_activation_token: false,
     }
 }

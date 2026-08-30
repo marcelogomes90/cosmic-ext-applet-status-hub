@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use cosmic::applet::token::subscription::TokenUpdate;
 use cosmic::iced::window;
 
+use crate::applet::wayland::WaylandUpdate;
 use crate::core::menu::MenuModel;
 use crate::core::model::{ItemAddress, ItemKey, TraySnapshot};
 
@@ -22,6 +22,6 @@ pub enum Message {
     DismissMenu,
     PinsChanged(crate::applet::pins::Pins),
     TogglePin(ItemKey),
-    Token(TokenUpdate),
+    Wayland(WaylandUpdate),
     Relayout,
 }

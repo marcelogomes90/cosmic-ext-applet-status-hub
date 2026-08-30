@@ -1,15 +1,14 @@
 pub mod icons;
+pub mod identity;
 pub mod menu_view;
 pub mod message;
 pub mod pins;
 pub mod popup;
 pub mod subscription;
+pub mod wayland;
 
 use cosmic::Element;
 use cosmic::app::{Core, Task};
-use cosmic::applet::token::subscription::{
-    TokenRequest, TokenUpdate, activation_token_subscription,
-};
 use cosmic::cctk::sctk::reexports::calloop;
 use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit};
 use cosmic::iced::mouse::Interaction;
@@ -26,6 +25,7 @@ use std::time::Duration;
 use crate::APP_ID;
 use crate::applet::icons::IconCache;
 use crate::applet::message::Message;
+use crate::applet::wayland::{ActivateRequest, Raise, TokenRequest, WaylandRequest, WaylandUpdate};
 use crate::core::icons::IconKind;
 use crate::core::menu::MenuModel;
 use crate::core::model::{ItemAddress, TraySnapshot, WatcherState};
@@ -81,6 +81,7 @@ enum PendingTokenAction {
         address: ItemAddress,
         id: i32,
         submenu: bool,
+        raise: Raise,
     },
 }
 
@@ -159,7 +160,7 @@ pub struct StatusHub {
     panel_menu: Option<window::Id>,
     expanded: Vec<i32>,
     pending_menu: Option<ItemAddress>,
-    token_tx: Option<calloop::channel::Sender<TokenRequest>>,
+    wayland_tx: Option<calloop::channel::Sender<WaylandRequest>>,
     next_token_request: u64,
     pending_tokens: HashMap<String, PendingTokenAction>,
     icon_retry_attempt: usize,
@@ -463,7 +464,7 @@ impl StatusHub {
     }
 
     fn request_token(&mut self, action: PendingTokenAction) -> Task<Message> {
-        let Some(token_tx) = self.token_tx.clone() else {
+        let Some(wayland_tx) = self.wayland_tx.clone() else {
             tracing::debug!("no activation token channel is available");
             return self.complete_token_action(action, None);
         };
@@ -471,11 +472,11 @@ impl StatusHub {
         self.next_token_request = self.next_token_request.wrapping_add(1);
         let exec = format!("status-hub-action:{}", self.next_token_request);
         self.pending_tokens.insert(exec.clone(), action);
-        if token_tx
-            .send(TokenRequest {
+        if wayland_tx
+            .send(WaylandRequest::Token(TokenRequest {
                 app_id: APP_ID.to_owned(),
                 exec: exec.clone(),
-            })
+            }))
             .is_err()
         {
             let action = self
@@ -488,15 +489,15 @@ impl StatusHub {
         Task::none()
     }
 
-    fn on_token(&mut self, update: TokenUpdate) -> Task<Message> {
+    fn on_wayland(&mut self, update: WaylandUpdate) -> Task<Message> {
         match update {
-            TokenUpdate::Init(sender) => {
-                self.token_tx = Some(sender);
+            WaylandUpdate::Init(sender) => {
+                self.wayland_tx = Some(sender);
                 Task::none()
             }
-            TokenUpdate::Finished => {
-                tracing::warn!("the activation token connection ended");
-                self.token_tx = None;
+            WaylandUpdate::Finished => {
+                tracing::warn!("the privileged Wayland connection ended");
+                self.wayland_tx = None;
                 let pending = std::mem::take(&mut self.pending_tokens);
                 Task::batch(
                     pending
@@ -504,7 +505,7 @@ impl StatusHub {
                         .map(|action| self.complete_token_action(action, None)),
                 )
             }
-            TokenUpdate::ActivationToken { token, exec } => {
+            WaylandUpdate::ActivationToken { token, exec } => {
                 tracing::info!(request = %exec, token = token.is_some(), "activation token");
                 match self.pending_tokens.remove(&exec) {
                     Some(action) => self.complete_token_action(action, token),
@@ -583,6 +584,41 @@ impl StatusHub {
         Task::batch([icon_task, menu_task])
     }
 
+    fn item_at(&self, address: &ItemAddress) -> Option<&crate::core::model::TrayItem> {
+        self.snapshot
+            .items
+            .iter()
+            .find(|item| item.address == *address)
+    }
+
+    fn takes_activation_token(&self, address: &ItemAddress) -> bool {
+        self.item_at(address)
+            .is_some_and(|item| item.takes_activation_token)
+    }
+
+    fn raise_for_entry(menu: &MenuModel, id: i32) -> Raise {
+        match menu.find(id) {
+            Some(entry) if entry.toggle.is_some() => Raise::Changed,
+            _ => Raise::Minimized,
+        }
+    }
+
+    fn raise_window_for(&self, address: &ItemAddress, raise: Raise) {
+        let Some(wayland_tx) = self.wayland_tx.as_ref() else {
+            return;
+        };
+        let hints = self
+            .item_at(address)
+            .map(identity::hints)
+            .unwrap_or_default();
+        if hints.is_empty() {
+            tracing::debug!(item = %address, "no window hints for this item");
+            return;
+        }
+
+        let _ = wayland_tx.send(WaylandRequest::Activate(ActivateRequest { hints, raise }));
+    }
+
     fn complete_token_action(
         &mut self,
         action: PendingTokenAction,
@@ -590,6 +626,7 @@ impl StatusHub {
     ) -> Task<Message> {
         match action {
             PendingTokenAction::Activate(address) => {
+                self.raise_window_for(&address, Raise::Unfocused);
                 self.tray.send(CoreCommand::Primary { address, token });
                 self.close_popup(true)
             }
@@ -597,7 +634,11 @@ impl StatusHub {
                 address,
                 id,
                 submenu,
+                raise,
             } => {
+                if !submenu && !self.takes_activation_token(&address) {
+                    self.raise_window_for(&address, raise);
+                }
                 self.tray.send(CoreCommand::MenuClicked {
                     address,
                     id,
@@ -908,7 +949,7 @@ impl cosmic::Application for StatusHub {
                 panel_menu: None,
                 expanded: Vec::new(),
                 pending_menu: None,
-                token_tx: None,
+                wayland_tx: None,
                 next_token_request: 0,
                 pending_tokens: HashMap::new(),
                 icon_retry_attempt: 0,
@@ -936,7 +977,7 @@ impl cosmic::Application for StatusHub {
             subscription::snapshots(&self.tray),
             subscription::menus(&self.tray),
             subscription::pins(),
-            activation_token_subscription(0).map(Message::Token),
+            wayland::subscription().map(Message::Wayland),
         ])
     }
 
@@ -986,14 +1027,22 @@ impl cosmic::Application for StatusHub {
 
             Message::Menu(menu) => self.on_menu(menu),
 
-            Message::MenuEntry { id, submenu } => match self.menu.as_ref() {
-                Some(menu) => self.request_token(PendingTokenAction::Menu {
+            Message::MenuEntry { id, submenu } => {
+                let Some(menu) = self.menu.clone() else {
+                    return Task::none();
+                };
+                let raise = if submenu {
+                    Raise::Changed
+                } else {
+                    Self::raise_for_entry(&menu, id)
+                };
+                self.request_token(PendingTokenAction::Menu {
                     address: menu.owner.clone(),
                     id,
                     submenu,
-                }),
-                None => Task::none(),
-            },
+                    raise,
+                })
+            }
 
             Message::OpenSettings => self.on_open_settings(),
 
@@ -1019,7 +1068,7 @@ impl cosmic::Application for StatusHub {
                 cosmic::task::message(Message::Relayout)
             }
 
-            Message::Token(update) => self.on_token(update),
+            Message::Wayland(update) => self.on_wayland(update),
         }
     }
 
@@ -1065,7 +1114,11 @@ impl cosmic::Application for StatusHub {
     fn view_window(&self, id: window::Id) -> Element<'_, Message> {
         if self.panel_menu == Some(id) {
             return match self.menu.as_ref() {
-                Some(model) => popup::menu_surface(menu_view::view(model, &self.expanded)),
+                Some(model) => popup::menu_surface(menu_view::view(
+                    model,
+                    &self.expanded,
+                    menu_view::Edges::BOTH,
+                )),
                 None => text::body("").into(),
             };
         }
@@ -1082,10 +1135,15 @@ impl cosmic::Application for StatusHub {
             } else {
                 self.popup_body()
             };
+            let edges = if popup::menu_comes_first(self.core.applet.anchor) {
+                menu_view::Edges::TOP
+            } else {
+                menu_view::Edges::BOTTOM
+            };
             let menu = self
                 .menu
                 .as_ref()
-                .map(|model| menu_view::view(model, &self.expanded));
+                .map(|model| menu_view::view(model, &self.expanded, edges));
             return popup::hub_surface(
                 self.header(),
                 body,

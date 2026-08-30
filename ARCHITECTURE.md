@@ -10,7 +10,8 @@ defend against a specific failure that tray applications cause in practice.
 ```
 src/
 ├── core/       the tray itself: D-Bus, lifecycle, ordering. No iced, no libcosmic.
-├── applet/     the COSMIC applet: iced views, popups, icon cache, presentation state.
+├── applet/     the COSMIC applet: iced views, popups, icon cache, presentation state,
+│            and the privileged Wayland connection for tokens and window raising.
 ├── testkit/    fakes that run on a real throwaway bus (feature = "testkit").
 ├── i18n.rs     Fluent catalogue loading.
 └── bin/        cosmic-status-hub-dump, a headless tray dumper.
@@ -311,6 +312,61 @@ recoloured pixmaps follow the active theme.
 Placing the complete theme lookup ahead of `IconThemePath` is a deliberate trade: it keeps the tray
 consistent with the theme the user chose, at the cost of a theme carrying a shorter fallback name
 winning over the exact file the application shipped.
+
+## Raising the window a tray item stands for
+
+The SNI spec has no way to say "show your window". A host calls `Activate` and the application is
+expected to raise itself. Under Wayland it cannot: focus only arrives with an xdg-activation token
+handed over by whoever owns the input event, and a minimized toplevel cannot unminimize itself at
+all. The KDE extension for this is `ProvideXdgActivationToken`, which the applet calls before every
+`Activate` and every menu `Event(clicked)`.
+
+That is the whole of what Plasma does, and all any tray host does. The design intent is that an
+application cannot take focus, only receive it — so the application, not the host, decides whether a
+given menu entry should show a window.
+
+Chromium and Electron trays do not implement the method. They drop the token and the click appears
+to do nothing, so for those the applet raises the window itself. `core::resolve` introspects each
+item alongside its properties; an interface listing `ProvideXdgActivationToken` is left to decide for
+itself. A sandboxed application whose `xdg-dbus-proxy` answers `<node/>` reads as not taking the
+token and falls into the rescue, which is the harmless direction.
+
+The rescue runs over the panel's privileged Wayland socket (`X_PRIVILEGED_WAYLAND_SOCKET`), which
+cosmic-panel creates through `wp_security_context_v1` with `sandbox_engine =
+com.system76.CosmicPanel`; cosmic-comp exposes `zcosmic_toplevel_info_v1` and
+`zcosmic_toplevel_manager_v1` to exactly those clients. `applet/wayland.rs` owns that connection and
+serves both the activation tokens and the toplevel list from one event loop — the socket is a single
+file descriptor and only one thread can hold it.
+
+A click records which matching toplevels exist and whether they are minimized, waits `SETTLE`, then
+decides:
+
+| after the click | what happens |
+| --- | --- |
+| a matching toplevel appeared, or left the minimized state | raise it |
+| one entered the minimized state, or closed | nothing — the application handled the click |
+| nothing changed | the `Raise` level on the request decides |
+
+`Raise` follows capability, never the wording of a menu entry:
+
+- **left click** → `Raise::Unfocused`, pulling forward even a window that is merely out of focus.
+  The request is unambiguous, and it covers a compositor that will not unminimize through
+  xdg-activation alone.
+- **menu entry, item takes the token** → no request at all.
+- **menu entry, item does not** → `Raise::Minimized`. The application had no way to act.
+- **submenu, or an entry carrying a `toggle-type`** → `Raise::Changed`, which acts on the first two
+  rows alone. A toggle is a setting rather than navigation; that is a protocol field, not a reading
+  of the label.
+
+Reading the label was tried twice and failed both ways round: an allow-list of show verbs held back
+"Show/Hide" and "Biblioteca", a deny-list of action verbs let nearly everything through. dbusmenu
+carries nothing that separates them — OBS publishes "Iniciar gravação" with a label, `enabled` and
+`visible` and nothing else, exactly as Steam publishes "Biblioteca".
+
+Matching an item to a toplevel is still a heuristic (`applet/identity.rs`): the item's `Id`,
+`Title`, tooltip title and icon name are split into segments, generic words dropped, and what
+survives scored against each toplevel's `app_id` and `title`. The process id would be exact but is
+useless here — for a Flatpak application `GetConnectionUnixProcessID` reports its `xdg-dbus-proxy`.
 
 ## Failure handling, briefly
 

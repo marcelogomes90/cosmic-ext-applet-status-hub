@@ -119,6 +119,14 @@ pub trait StatusNotifierItem {
     fn new_status(&self, status: &str) -> zbus::Result<()>;
 }
 
+#[zbus::proxy(
+    interface = "org.freedesktop.DBus.Introspectable",
+    assume_defaults = false
+)]
+pub trait Introspectable {
+    fn introspect(&self) -> zbus::Result<String>;
+}
+
 #[zbus::proxy(interface = "com.canonical.dbusmenu", assume_defaults = false)]
 pub trait DBusMenu {
     fn get_layout(
