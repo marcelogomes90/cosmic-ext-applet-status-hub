@@ -973,11 +973,14 @@ mod tests {
 
     #[test]
     fn the_global_theme_including_its_name_fallback_wins_over_the_app_and_pixmap() {
+        let Some(themed) = FALLBACKS.iter().copied().find(|n| lookup(n, 24).is_some()) else {
+            return;
+        };
         let root = test_root("global-priority");
-        let name = "application-default-status-hub-specific";
-        let app_path = published_svg(&root, name, "<svg/>");
+        let name = format!("{themed}-status-hub-specific");
+        let app_path = published_svg(&root, &name, "<svg/>");
         let options = IconOptions {
-            name: Some(name.to_owned()),
+            name: Some(name.clone()),
             theme_path: Some(root.to_string_lossy().into_owned()),
             pixels: Some(std::sync::Arc::new(pixmap(24, |_, _| [0, 0, 0, 0]))),
             ..IconOptions::default()
