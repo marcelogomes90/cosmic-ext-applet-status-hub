@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 pub mod applet;
 pub mod core;
+pub mod flatpak;
 pub mod i18n;
 
 #[cfg(feature = "testkit")]
@@ -19,8 +20,7 @@ pub fn extend_data_dirs() {
 }
 
 fn export_roots() -> impl Iterator<Item = PathBuf> {
-    std::iter::once(PathBuf::from("/var/lib/flatpak"))
-        .chain(std::env::home_dir().map(|home| home.join(".local/share/flatpak")))
+    crate::flatpak::installations()
         .map(|install| install.join("exports/share"))
         .filter(|root| root.is_dir())
 }

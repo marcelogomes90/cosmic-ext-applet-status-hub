@@ -11,6 +11,8 @@ const FALLBACKS: [&str; 2] = ["application-default", "application-x-executable"]
 
 const MAX_SVG_BYTES: u64 = 256 * 1024;
 
+const MAX_RASTER_BYTES: u64 = 1024 * 1024;
+
 const MAX_CHROMA: f32 = 8.0;
 
 const MIN_ALPHA: u8 = 16;
@@ -157,6 +159,12 @@ struct Built {
     paint: &'static str,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Origin {
+    Published,
+    Payload,
+}
+
 fn build(options: &IconOptions, size: u16, theme: &ThemeContext) -> Built {
     if let Some(name) = &options.name {
         if let Some(path) = lookup(name, size) {
@@ -170,13 +178,13 @@ fn build(options: &IconOptions, size: u16, theme: &ThemeContext) -> Built {
             };
         }
 
-        if let Some(path) = options
+        if let Some((path, origin)) = options
             .theme_path
             .as_deref()
             .and_then(|root| lookup_published(name, root, size))
         {
-            let source = format!("published name {name} -> {}", path.display());
-            let (handle, paint) = handle_for(path, name);
+            let source = format!("{} name {name} -> {}", origin.label(), path.display());
+            let (handle, paint) = handle_from(path, name, origin, theme);
             return Built {
                 handle,
                 source,
@@ -186,18 +194,17 @@ fn build(options: &IconOptions, size: u16, theme: &ThemeContext) -> Built {
         }
     }
 
-    if let Some(path) = &options.path {
-        let path = PathBuf::from(path);
-        if path.exists() {
-            let source = format!("published path {}", path.display());
-            let (handle, paint) = handle_for(path, "");
-            return Built {
-                handle,
-                source,
-                fallback: false,
-                paint,
-            };
-        }
+    if let Some(published) = &options.path
+        && let Some((path, origin)) = resolve_path(published)
+    {
+        let source = format!("{} path {}", origin.label(), path.display());
+        let (handle, paint) = handle_from(path, "", origin, theme);
+        return Built {
+            handle,
+            source,
+            fallback: false,
+            paint,
+        };
     }
 
     if let Some(published) = &options.pixels {
@@ -242,11 +249,40 @@ fn build(options: &IconOptions, size: u16, theme: &ThemeContext) -> Built {
     }
 }
 
-fn lookup_published(name: &str, root: &str, size: u16) -> Option<PathBuf> {
+impl Origin {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Published => "published",
+            Self::Payload => "payload",
+        }
+    }
+}
+
+fn resolve_path(published: &str) -> Option<(PathBuf, Origin)> {
+    let path = PathBuf::from(published);
+    if path.exists() {
+        return Some((path, Origin::Published));
+    }
+    crate::flatpak::payload_file(published).map(|path| (path, Origin::Payload))
+}
+
+fn lookup_published(name: &str, root: &str, size: u16) -> Option<(PathBuf, Origin)> {
     if root.is_empty() {
         return None;
     }
-    let root = PathBuf::from(root);
+
+    if Path::new(root).is_dir() {
+        return search(name, Path::new(root), size).map(|path| (path, Origin::Published));
+    }
+
+    crate::flatpak::payload_roots(root)
+        .iter()
+        .find_map(|root| search(name, root, size))
+        .map(|path| (path, Origin::Payload))
+}
+
+fn search(name: &str, root: &Path, size: u16) -> Option<PathBuf> {
+    let root = root.canonicalize().ok()?;
     let roots = [root.clone()];
     let find = |prefer_svg| {
         let mut lookup = cosmic_freedesktop_icons::lookup(name)
@@ -559,6 +595,39 @@ fn level(pixel: [u8; 4]) -> u16 {
     (u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2])) / 3
 }
 
+fn handle_from(
+    path: PathBuf,
+    name: &str,
+    origin: Origin,
+    theme: &ThemeContext,
+) -> (icon::Handle, &'static str) {
+    if origin == Origin::Payload
+        && let Some(image) = raster(&path)
+        && let Some(recoloured) = recolour(&image, theme)
+    {
+        return (
+            icon::from_raster_pixels(recoloured.width, recoloured.height, recoloured.bytes),
+            "payload-recoloured",
+        );
+    }
+    handle_for(path, name)
+}
+
+fn raster(path: &Path) -> Option<RgbaImage> {
+    if path.extension() == Some(OsStr::new("svg"))
+        || !std::fs::metadata(path).is_ok_and(|meta| meta.len() <= MAX_RASTER_BYTES)
+    {
+        return None;
+    }
+
+    let decoded = image::open(path).ok()?.into_rgba8();
+    Some(RgbaImage {
+        width: decoded.width(),
+        height: decoded.height(),
+        bytes: decoded.into_raw(),
+    })
+}
+
 fn handle_for(path: PathBuf, name: &str) -> (icon::Handle, &'static str) {
     let explicit = name.ends_with("-symbolic")
         || path
@@ -800,7 +869,7 @@ mod tests {
 
         assert_eq!(
             lookup_published(&name, root.to_str().unwrap(), 24),
-            Some(icon_path)
+            Some((icon_path.canonicalize().unwrap(), Origin::Published))
         );
 
         std::fs::remove_dir_all(root).unwrap();
@@ -941,7 +1010,10 @@ mod tests {
 
         assert_eq!(
             built.source,
-            format!("published name {name} -> {}", app_path.display())
+            format!(
+                "published name {name} -> {}",
+                app_path.canonicalize().unwrap().display()
+            )
         );
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -1342,5 +1414,59 @@ mod tests {
         let image = pixmap(10, |_, _| [0, 0, 0, 0]);
 
         assert!(recolour(&image, &light_panel()).is_none());
+    }
+
+    fn png_at(path: &Path, image: &RgbaImage) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        image::save_buffer_with_format(
+            path,
+            &image.bytes,
+            image.width,
+            image.height,
+            image::ExtendedColorType::Rgba8,
+            image::ImageFormat::Png,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn a_raster_recovered_from_a_payload_is_adapted_to_the_panel() {
+        let root = test_root("payload-raster");
+        let glyph = pixmap(10, |_, y| {
+            if (2..8).contains(&y) {
+                [245, 245, 245, 180]
+            } else {
+                [0, 0, 0, 0]
+            }
+        });
+        let path = root.join("tray.png");
+        png_at(&path, &glyph);
+
+        let (_, payload) = handle_from(path.clone(), "", Origin::Payload, &light_panel());
+        let (_, published) = handle_from(path, "", Origin::Published, &light_panel());
+
+        assert_eq!(
+            payload, "payload-recoloured",
+            "the application drew this for its own panel, not for this theme"
+        );
+        assert_eq!(
+            published, "original",
+            "a file found where the application said it would be keeps its appearance"
+        );
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn vector_artwork_from_a_payload_still_goes_through_symbolic_detection() {
+        let root = test_root("payload-vector");
+        let path = svg_at(&root, "glyph-symbolic", "<svg/>");
+
+        let (handle, paint) = handle_from(path, "glyph-symbolic", Origin::Payload, &light_panel());
+
+        assert!(handle.symbolic);
+        assert_eq!(paint, "symbolic-explicit");
+
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

@@ -246,6 +246,26 @@ A relative name and an absolute path are mutually exclusive interpretations of `
 the global theme lookup before consulting `IconThemePath` is deliberate: visual consistency with
 the user's chosen theme wins even when the match is a shorter, more generic name.
 
+Steps 2 and 3 also resolve a path this process cannot read (`src/flatpak.rs`). An application in a
+Flatpak names its icon directory either from inside its own sandbox, `/app/...`, or under the
+per-application data directory, and neither is reachable from here — but the same artwork ships in
+that application's payload, which is. The owner is recovered two ways: a path under
+`<home>/.var/app/<app id>/` names the application outright, while a `/app/<tail>` path is matched
+against the payloads of installed applications. **That match must be unique or it is refused.** A
+tail like `share/icons` is shipped by nearly every application — 30 of 31 on the machine this was
+measured on — and serving another application's artwork is worse than serving none, so anything but
+a single candidate falls through to the next step. Once the owner is known the search covers the
+translated tail plus `share/icons` and `share/pixmaps`, the same pair the freedesktop lookup derives
+from any data directory. Each candidate is canonicalised first: a payload is reached through the
+`current` and `active` symlinks, and the walker canonicalises the roots it is handed, so the guard
+that keeps a result inside its own root would otherwise reject every match.
+
+This only runs when the published path does not exist, which leaves every item that resolves today
+untouched and makes the whole branch inert outside a sandbox. A raster recovered this way is passed
+through the same adaptation as a published pixmap, because the application drew it for its own panel
+rather than for this theme; a file found where the application said it would be keeps the appearance
+it always had.
+
 Painting is deliberately conservative. An SVG is symbolic when its name ends in `-symbolic`, or
 when its live paint rules describe at most one achromatic ink; multi-tone, coloured, embedded, or
 unrecognised content keeps its original appearance.

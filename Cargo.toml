@@ -36,6 +36,7 @@ return_self_not_must_use = "allow"
 futures = "0.3"
 cosmic-freedesktop-icons = { git = "https://github.com/pop-os/freedesktop-icons" }
 i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 i18n-embed-fl = "0.10"
 rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
