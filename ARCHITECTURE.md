@@ -233,22 +233,64 @@ neither an attention name nor a valid attention pixmap — and everything else r
 
 The lookup then runs in a fixed order (`applet/icons.rs`):
 
-1. the absolute path the item published, if the file exists;
-2. the name in the user's icon theme, SVG preferred over raster;
-3. the name under the item's own `IconThemePath`, accepted only if the result really lives there;
+1. the name in the user's icon theme, including its progressively shorter name fallbacks, with SVG
+   preferred over raster;
+2. the name under the item's own `IconThemePath`, accepted only if the result really lives there;
+3. the absolute path the item published, if the value is a path and the file exists;
 4. the raw pixmap, ARGB converted to RGBA, choosing the smallest frame at least as large as the
    target and otherwise the largest available;
 5. `application-default`, then `application-x-executable`.
+
+A relative name and an absolute path are mutually exclusive interpretations of `IconName`, so step
+3 is a separate branch rather than a candidate that can displace a themed relative name. Completing
+the global theme lookup before consulting `IconThemePath` is deliberate: visual consistency with
+the user's chosen theme wins even when the match is a shorter, more generic name.
+
+Painting is deliberately conservative. An SVG is symbolic when its name ends in `-symbolic`, or
+when its live paint rules describe at most one achromatic ink; multi-tone, coloured, embedded, or
+unrecognised content keeps its original appearance.
+
+A raster is adapted only when it has a transparent margin and cannot already be read on the panel.
+Artwork keeps its published appearance when most of its ink already clears 3:1 against the panel
+background, or when a meaningful share does *and* that share traces the whole shape. Both halves are
+needed. Judging by the average tone fails where it matters most: a black glyph inside a thick white
+outline averages to a mid grey that contrasts with nothing, while both of its real tones read on any
+panel. Judging by share alone fails the other way: a white icon with a small dark glyph in the middle
+clears the share test while the rest of it disappears, so the legible ink is also required to span
+most of the artwork's extent rather than sit as a detail inside it.
+
+Legibility and the representative tone are measured on the opaque core, the pixels at nine tenths of
+the artwork's own peak alpha or above, because antialiasing is coverage rather than content and
+should not vote on how the artwork reads. Whether the artwork is tonal is decided on every visible
+pixel instead: a light disc drawn with a darker outline carries that outline below the core's alpha,
+and treating it as single-tone flattens the whole icon into one solid shape.
+
+Single-tone achromatic silhouettes receive the theme foreground directly. Multi-tone achromatic
+artwork is translated onto the theme foreground: each tone keeps its own distance from the
+alpha-weighted representative tone, capped so no detail runs away, so the published tonal structure
+survives at its original width instead of being stretched to fill a fixed range. Alpha is never
+changed, including fully transparent cutouts and partially transparent antialiasing.
+
+A compact chromatic region touching an image edge is treated as a possible badge. Its complete
+bounding region, plus a small safety margin, is kept untouched (including achromatic text and
+antialiasing inside it), but the base outside that region is adapted only when it is single-tone. If
+the base itself is multi-tone, changing one part while freezing the badge is too likely to split one
+piece of artwork, so the whole pixmap is kept as published. A chromatic region that is large,
+dispersed, central, or leaves no independently paintable base is likewise preserved in full. This
+lets a plainly separable badge coexist with a symbolic base without interpreting ordinary
+multicolour application art as symbolic.
 
 Many applications publish no icon name at all, so step 4 is a common outcome rather than a last
 resort. Only step 5 is marked as a fallback, and that flag drives the retry ladder: a fallback entry
 is resolved again on a schedule stretching to about a minute, for applications that register an item
 before publishing its icon. The cache is keyed by `(address, generation, kind, size)`, so a fresh
-resolve of the item invalidates its icon with no explicit invalidation anywhere.
+resolve of the item invalidates its icon with no explicit invalidation anywhere. A change to the
+icon theme, panel background, or foreground also clears the cache so both asset selection and
+recoloured pixmaps follow the active theme.
 
-Placing the theme ahead of `IconThemePath` is a deliberate trade: it keeps the tray consistent with
-the theme the user chose, at the cost of a theme carrying the same name winning over the file the
-application shipped.
+Placing the complete theme lookup ahead of `IconThemePath` is a deliberate trade: it keeps the tray
+consistent with the theme the user chose, at the cost of a theme carrying a shorter fallback name
+winning over the exact file the application shipped.
 
 ## Failure handling, briefly
 
