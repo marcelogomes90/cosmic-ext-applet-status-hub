@@ -69,6 +69,16 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.2.0" date="2026-08-30">
+      <description>
+        <p>Icons an application publishes from inside its own sandbox now resolve, tray artwork is adapted to the panel it sits on, and the Flatpak asks for far fewer permissions.</p>
+        <ul>
+          <li>Finds an icon whose directory means something only inside the publishing application's own sandbox, by looking for the same artwork in that application's Flatpak payload. Dropbox and Steam show the icons they ship instead of a generic one, and the rule carries no per-application knowledge, so any application publishing such a path is covered.</li>
+          <li>Adapts achromatic tray artwork to the panel, so a glyph drawn for a dark panel no longer disappears on a light one. Artwork that already reads is left untouched, judged by how much of its ink contrasts with the panel and whether that ink traces the whole shape, rather than by an average tone that no part of the artwork actually has.</li>
+          <li>Asks for eleven permissions instead of fifteen. Read access to every Flatpak application's private data, to the host system tree and to the user's icon directory is gone, since Flatpak already exposes the host icon themes on its own; both export grants are narrowed to their icons subtree.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.1.0" date="2026-08-29">
       <description>
         <p>Items can be pinned to the panel, the popup gained a settings view, and the interface is available in ten languages.</p>
