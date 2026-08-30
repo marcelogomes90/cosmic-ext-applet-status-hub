@@ -69,6 +69,16 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.3.0" date="2026-08-30">
+      <description>
+        <p>Clicking a tray item now brings the application's window forward, even when the application has no way to do that itself.</p>
+        <ul>
+          <li>Raises the window for applications that do not implement ProvideXdgActivationToken, every Chromium and Electron tray among them, which under Wayland can neither take focus nor restore a minimized window. Applications that do implement it are handed the token and left to decide, so a menu entry meant only to start a recording no longer disturbs the window.</li>
+          <li>Rounds the hover of the first and last menu entry to follow the popup's corner radius, instead of overflowing it.</li>
+          <li>Dims menu entries the application marked unavailable, which were drawn in the same colour as the ones that can be clicked.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.2.1" date="2026-08-30">
       <description>
         <p>No user-visible change. Corrects a test that assumed a COSMIC icon theme is installed, which made the suite fail on a machine without one.</p>
