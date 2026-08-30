@@ -211,9 +211,18 @@ reaches the others.
 The Flatpak is Wayland-only, so it does not share the host IPC namespace (that permission is for
 X11 shared memory). DRI remains available for iced/wgpu rendering, and the session bus cannot be
 narrowed to a fixed list because a StatusNotifierHost must receive registrations and call items
-under arbitrary application bus names. Read-only filesystem grants cover the host, Flatpak, Snap,
-and user icon roots; the only writable grant is this applet's own COSMIC configuration directory,
-where pins are stored.
+under arbitrary application bus names.
+
+The read-only filesystem grants are only what icon resolution cannot reach otherwise. Flatpak
+already exposes the host's system and user icon themes on `XDG_DATA_DIRS`, at `/run/host/share`
+and `/run/host/user-share`, without any permission at all, so no grant asks for those. What it
+leaves out is `<installation>/exports/share/icons`, where applications publish the icons they name;
+`extend_data_dirs` (`src/lib.rs`) appends those trees to the value Flatpak set rather than replacing
+it, which is what keeps the free host themes in the search path. Each entry there is a symlink into
+`<installation>/app/<id>/current/active/export`, so the app tree is granted alongside them or every
+link dangles. `~/.icons` is granted because that legacy path is a real search root nothing else
+covers. The only writable grant is this applet's own COSMIC configuration directory, where pins are
+stored.
 
 ## Icon resolution
 

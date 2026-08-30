@@ -1,6 +1,8 @@
 use cosmic_status_hub::core::{self, MemoryOrderStore};
 
 fn main() -> cosmic::iced::Result {
+    cosmic_status_hub::extend_data_dirs();
+
     cosmic_status_hub::init_tracing();
     cosmic_status_hub::i18n::init();
     tracing::info!(
