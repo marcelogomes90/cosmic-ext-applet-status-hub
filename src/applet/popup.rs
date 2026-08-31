@@ -12,11 +12,18 @@ const MAX_HEIGHT: u16 = 1080;
 pub const HEADER_CONTROL: u16 = 32;
 pub const HEADER_ICON: u16 = 16;
 pub const SETTINGS_ROW: u16 = 36;
+pub const DRAG_HANDLE_ICON: &str = "grip-lines-symbolic";
+pub const DRAG_HANDLE_SIZE: u16 = 16;
+pub const DRAG_HANDLE_TARGET: u16 = 24;
+pub const SETTINGS_ROW_LEFT_PADDING: u16 = 8;
+pub const SETTINGS_ROW_RIGHT_PADDING: u16 = 12;
 pub const PANEL_ICON: &str = "view-more-horizontal-symbolic";
 pub const SETTINGS_ICON: &str = "emblem-system-symbolic";
 pub const CONTENT_PADDING: u16 = 16;
+pub const TRAY_HORIZONTAL_PADDING: u16 = 8;
 pub const HEADER_PADDING: u16 = 12;
 pub const NOTICE_PADDING: u16 = HEADER_PADDING;
+pub const SETTINGS_HORIZONTAL_PADDING: u16 = CONTENT_PADDING;
 
 static TRAY_AUTOSIZE_ID: LazyLock<cosmic::iced::id::Id> =
     LazyLock::new(|| cosmic::iced::id::Id::new("cosmic-status-hub-tray-popup"));
@@ -144,11 +151,32 @@ pub fn pinned_slot(wing: Wing, index: usize) -> usize {
     if hub_leads(wing) { index + 1 } else { index }
 }
 
-pub fn panel_slot_rect(slot: usize, button: (u16, u16), horizontal: bool) -> Rectangle<i32> {
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub fn overlap(major_padding: u16, padding_overlap: f32, density_allowance: u16) -> u16 {
+    if !padding_overlap.is_finite() || padding_overlap <= 0.0 {
+        return 0;
+    }
+    let scaled = (f32::from(major_padding) * padding_overlap.min(1.0)).round();
+    (scaled as u16)
+        .min(major_padding)
+        .saturating_sub(density_allowance)
+}
+
+pub fn lead(overlap: u16) -> u16 {
+    overlap / 2
+}
+
+pub fn panel_slot_rect(
+    slot: usize,
+    button: (u16, u16),
+    lead: u16,
+    horizontal: bool,
+) -> Rectangle<i32> {
     let (width, height) = (i32::from(button.0), i32::from(button.1));
     let offset = i32::try_from(slot)
         .unwrap_or(i32::MAX)
-        .saturating_mul(if horizontal { width } else { height });
+        .saturating_mul(if horizontal { width } else { height })
+        .saturating_add(i32::from(lead));
 
     Rectangle {
         x: if horizontal { offset } else { 0 },
@@ -162,6 +190,7 @@ pub fn item_grid<'a, Message: 'static + Clone>(
     items: impl IntoIterator<Item = Element<'a, Message>>,
     spacing: u16,
     height: u16,
+    lead: u16,
 ) -> Element<'a, Message> {
     let grid = flex_row(items.into_iter().collect())
         .spacing(spacing)
@@ -171,7 +200,7 @@ pub fn item_grid<'a, Message: 'static + Clone>(
     container(grid)
         .width(Length::Fill)
         .height(Length::Fixed(f32::from(height)))
-        .padding([HEADER_PADDING, CONTENT_PADDING])
+        .padding([HEADER_PADDING, TRAY_HORIZONTAL_PADDING.saturating_add(lead)])
         .align_x(Alignment::Start)
         .align_y(Alignment::Center)
         .into()
@@ -303,6 +332,7 @@ pub fn header<Message: 'static + Clone>(
 pub fn panel_item_capacity(
     suggested_bounds: Option<Size>,
     button: (u16, u16),
+    lead: u16,
     horizontal: bool,
 ) -> usize {
     let Some(bounds) = suggested_bounds else {
@@ -312,7 +342,7 @@ pub fn panel_item_capacity(
         bounds.width
     } else {
         bounds.height
-    };
+    } - f32::from(lead) * 2.0;
     if available <= 0.0 {
         return usize::MAX;
     }
@@ -351,8 +381,12 @@ pub fn panel_size_limits(suggested_bounds: Option<Size>, horizontal: bool) -> Li
 pub fn panel_surface<'a, Message: 'static>(
     content: impl Into<Element<'a, Message>>,
     suggested_bounds: Option<Size>,
+    lead: u16,
     horizontal: bool,
 ) -> Element<'a, Message> {
+    let padding = if horizontal { [0, lead] } else { [lead, 0] };
+    let content = container(content).padding(padding);
+
     autosize::autosize(content, PANEL_AUTOSIZE_ID.clone())
         .limits(panel_size_limits(suggested_bounds, horizontal))
         .into()
@@ -372,19 +406,14 @@ pub fn notice<'a, Message: 'static>(message: String, height: u16) -> Element<'a,
 }
 
 pub fn settings_list<'a, Message: 'static>(
-    rows: impl IntoIterator<Item = Element<'a, Message>>,
+    list: impl Into<Element<'a, Message>>,
     height: u16,
-    spacing: u16,
     padding: u16,
 ) -> Element<'a, Message> {
-    let list = cosmic::widget::column::with_children(rows.into_iter().collect::<Vec<_>>())
-        .width(Length::Fill)
-        .spacing(spacing);
-
-    container(scrollable(list))
+    container(scrollable(list.into()))
         .width(Length::Fill)
         .height(Length::Fixed(f32::from(height)))
-        .padding([padding, CONTENT_PADDING])
+        .padding([padding, SETTINGS_HORIZONTAL_PADDING])
         .into()
 }
 
@@ -529,18 +558,18 @@ mod tests {
     #[test]
     fn panel_capacity_always_reserves_one_slot_for_the_hub() {
         assert_eq!(
-            panel_item_capacity(Some(Size::new(160.0, 32.0)), (40, 32), true),
+            panel_item_capacity(Some(Size::new(160.0, 32.0)), (40, 32), 0, true),
             3
         );
         assert_eq!(
-            panel_item_capacity(Some(Size::new(20.0, 32.0)), (40, 32), true),
+            panel_item_capacity(Some(Size::new(20.0, 32.0)), (40, 32), 0, true),
             0
         );
         assert_eq!(
-            panel_item_capacity(Some(Size::new(40.0, 120.0)), (40, 30), false),
+            panel_item_capacity(Some(Size::new(40.0, 120.0)), (40, 30), 0, false),
             3
         );
-        assert_eq!(panel_item_capacity(None, (40, 32), true), usize::MAX);
+        assert_eq!(panel_item_capacity(None, (40, 32), 0, true), usize::MAX);
     }
 
     #[test]
@@ -629,9 +658,57 @@ mod tests {
     }
 
     #[test]
+    fn a_strip_matches_the_gap_the_panel_puts_between_its_own_applets() {
+        assert_eq!(overlap(15, 0.5, 0), 8);
+        assert_eq!(lead(overlap(15, 0.5, 0)), 4);
+    }
+
+    #[test]
+    fn the_spacious_density_widens_the_gap_and_the_others_leave_it_alone() {
+        assert_eq!(overlap(15, 0.5, 0), 8, "22px between glyphs");
+        assert_eq!(overlap(15, 0.5, 4), 4, "26px between glyphs");
+    }
+
+    #[test]
+    fn a_panel_that_does_not_overlap_leaves_every_box_alone() {
+        assert_eq!(overlap(15, 0.0, 0), 0);
+        assert_eq!(lead(overlap(15, 0.0, 4)), 0);
+        assert_eq!(overlap(0, 0.5, 0), 0);
+        assert_eq!(
+            overlap(15, f32::NAN, 0),
+            0,
+            "an unreadable value must not eat the padding"
+        );
+        assert_eq!(overlap(15, -1.0, 0), 0);
+    }
+
+    #[test]
+    fn shrinking_never_takes_more_than_the_padding_itself() {
+        assert_eq!(
+            overlap(15, 1.0, 0),
+            15,
+            "a full overlap still leaves the icon its own box"
+        );
+        assert_eq!(overlap(15, 4.0, 0), 15);
+        assert_eq!(
+            overlap(3, 1.0, 4),
+            0,
+            "a density allowance larger than the overlap simply spends it all"
+        );
+    }
+
+    #[test]
+    fn the_leading_edge_offsets_every_slot_so_the_outer_padding_survives() {
+        let shifted = panel_slot_rect(2, (44, 44), 4, true);
+        assert_eq!(shifted.x, 4 + 2 * 44);
+        assert_eq!(panel_slot_rect(0, (44, 44), 4, true).x, 4);
+        assert_eq!(panel_slot_rect(2, (44, 44), 4, false).y, 4 + 2 * 44);
+    }
+
+    #[test]
     fn a_pinned_item_is_anchored_to_its_own_slot() {
         assert_eq!(
-            panel_slot_rect(2, (32, 28), true),
+            panel_slot_rect(2, (32, 28), 0, true),
             Rectangle {
                 x: 64,
                 y: 0,
@@ -640,7 +717,7 @@ mod tests {
             }
         );
         assert_eq!(
-            panel_slot_rect(2, (32, 28), false),
+            panel_slot_rect(2, (32, 28), 0, false),
             Rectangle {
                 x: 0,
                 y: 56,
@@ -649,7 +726,7 @@ mod tests {
             }
         );
         assert_eq!(
-            panel_slot_rect(0, (32, 28), true),
+            panel_slot_rect(0, (32, 28), 0, true),
             Rectangle {
                 x: 0,
                 y: 0,

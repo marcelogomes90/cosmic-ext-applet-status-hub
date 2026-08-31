@@ -117,6 +117,9 @@ pub trait StatusNotifierItem {
 
     #[zbus(signal)]
     fn new_status(&self, status: &str) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn new_icon_theme_path(&self, path: &str) -> zbus::Result<()>;
 }
 
 #[zbus::proxy(

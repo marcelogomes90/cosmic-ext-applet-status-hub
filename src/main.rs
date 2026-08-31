@@ -1,4 +1,5 @@
-use cosmic_status_hub::core::{self, MemoryOrderStore};
+use cosmic_status_hub::applet::order::ConfigOrderStore;
+use cosmic_status_hub::core;
 
 fn main() -> cosmic::iced::Result {
     cosmic_status_hub::extend_data_dirs();
@@ -19,7 +20,10 @@ fn main() -> cosmic::iced::Result {
         .build()
         .expect("failed to start the D-Bus runtime");
 
-    let (handle, _join) = core::spawn(runtime.handle(), MemoryOrderStore::default());
+    let (handle, _join) = core::spawn(
+        runtime.handle(),
+        ConfigOrderStore::open(cosmic_status_hub::APP_ID),
+    );
 
     let _runtime = Box::leak(Box::new(runtime));
 

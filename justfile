@@ -48,12 +48,9 @@ fmt-check:
 test *args:
     cargo test --features testkit {{args}}
 
-# Validate the desktop entry and the AppStream metainfo.
 validate:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Categories=COSMIC; is what every official COSMIC applet ships and is what the panel
-    # expects, but it is not a registered freedesktop category. Drop just that diagnostic.
     output="$(desktop-file-validate resources/{{appid}}.desktop || true)"
     output="$(printf '%s\n' "${output}" | grep -v 'unregistered value "COSMIC"' \
         | grep -v 'does not contain a registered main category' | grep -v '^$' || true)"
@@ -63,15 +60,12 @@ validate:
 
 verify: fmt-check check test validate
 
-# Run the applet. It expects a COSMIC panel to host its surface.
 run *args:
     cargo run --bin {{name}} {{args}}
 
-# Run the core with no user interface, printing every snapshot.
 run-dump *args:
     cargo run --bin {{name}}-dump {{args}}
 
-# Publish a synthetic tray item. Second argument may be `hangs` or `broken`.
 run-fake-item *args:
     cargo run --features testkit --example publish_item -- {{args}}
 
@@ -96,18 +90,15 @@ install-user:
 uninstall-user:
     rm -f {{user-bin-dst}} {{user-desktop-dst}} {{user-metainfo-dst}} {{user-icon-dst}}
 
-# Regenerate the vendored Cargo sources from Cargo.lock. Needs network access.
 flatpak-sources:
     flatpak run --filesystem="$(pwd)" --share=network \
         --command=flatpak-cargo-generator org.flatpak.Builder \
         "$(pwd)/Cargo.lock" -o "$(pwd)/{{flatpak-dir}}/cargo-sources.json"
 
-# Build the Flatpak from the published tag and install it for the current user.
 flatpak-build:
     flatpak-builder --user --install --force-clean --ccache \
         {{flatpak-build-dir}} {{manifest}}
 
-# Build the Flatpak from the working tree rather than the published tag.
 flatpak-build-local:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -121,7 +112,6 @@ flatpak-build-local:
 flatpak-run *args:
     flatpak run {{appid}} {{args}}
 
-# Run the headless snapshot dumper inside the Flatpak sandbox.
 flatpak-dump:
     flatpak run --command={{name}}-dump {{appid}}
 

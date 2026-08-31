@@ -84,7 +84,6 @@ fn best_frame(pixmaps: &[Pixmap], target_px: u32) -> Option<&Pixmap> {
 
 fn decode(frame: &Pixmap) -> RgbaImage {
     let mut bytes = frame.bytes.clone();
-    // SNI pixmaps arrive as network-order ARGB and iced expects RGBA.
     for pixel in bytes.as_chunks_mut::<4>().0 {
         pixel.rotate_left(1);
     }

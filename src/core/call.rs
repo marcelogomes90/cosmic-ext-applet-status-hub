@@ -27,10 +27,22 @@ impl CallError {
     pub fn is_transient(&self) -> bool {
         match self {
             Self::Timeout { .. } => true,
-            Self::Dbus { source, .. } => !matches!(
-                **source,
-                zbus::Error::MethodError(..) | zbus::Error::InterfaceNotFound
-            ),
+            Self::Dbus { source, .. } => match &**source {
+                zbus::Error::MethodError(..) | zbus::Error::InterfaceNotFound => false,
+                zbus::Error::FDO(fdo) => matches!(
+                    **fdo,
+                    zbus::fdo::Error::NoReply(_)
+                        | zbus::fdo::Error::Timeout(_)
+                        | zbus::fdo::Error::TimedOut(_)
+                        | zbus::fdo::Error::IOError(_)
+                        | zbus::fdo::Error::NoServer(_)
+                        | zbus::fdo::Error::NoNetwork(_)
+                        | zbus::fdo::Error::Disconnected(_)
+                        | zbus::fdo::Error::NoMemory(_)
+                        | zbus::fdo::Error::LimitsExceeded(_)
+                ),
+                _ => true,
+            },
         }
     }
 }
@@ -168,5 +180,26 @@ mod tests {
             source: Box::new(zbus::Error::InterfaceNotFound),
         };
         assert!(!err.is_transient());
+    }
+
+    #[test]
+    fn a_property_the_item_does_not_have_is_not_retried() {
+        let err = CallError::Dbus {
+            label: "IconPixmap",
+            source: Box::new(zbus::fdo::Error::UnknownProperty("IconPixmap".to_owned()).into()),
+        };
+        assert!(
+            !err.is_transient(),
+            "the item answered; asking again cannot change the answer"
+        );
+    }
+
+    #[test]
+    fn an_item_that_never_replied_is_retried() {
+        let err = CallError::Dbus {
+            label: "Id",
+            source: Box::new(zbus::fdo::Error::NoReply("busy".to_owned()).into()),
+        };
+        assert!(err.is_transient());
     }
 }

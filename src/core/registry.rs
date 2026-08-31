@@ -278,6 +278,11 @@ impl Registry {
                 ItemKey::derive_id(
                     &entry.props.id,
                     &entry.props.title,
+                    entry
+                        .props
+                        .tooltip
+                        .as_ref()
+                        .map_or("", |tooltip| tooltip.title.as_str()),
                     entry.address.service.inner(),
                 )
             })

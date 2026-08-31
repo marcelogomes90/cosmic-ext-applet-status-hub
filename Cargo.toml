@@ -37,6 +37,7 @@ futures = "0.3"
 cosmic-freedesktop-icons = { git = "https://github.com/pop-os/freedesktop-icons" }
 i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+resvg = { version = "0.45", default-features = false }
 i18n-embed-fl = "0.10"
 rust-embed = "8"
 serde = { version = "1", features = ["derive"] }
@@ -45,11 +46,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = { version = "5.14", default-features = false, features = ["tokio"] }
 
-# Do not pin a `rev` here. cosmic-panel-config depends on cosmic-config through the
-# bare libcosmic URL, and a `rev` makes that a second, distinct Cargo source for the
-# same repository. flatpak-cargo-generator emits only one source replacement per URL,
-# so the offline Flatpak build then fails to resolve the unpinned copy.
-# Cargo.lock still pins the exact commit, so builds stay reproducible.
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic"
 default-features = false

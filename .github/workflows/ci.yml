@@ -58,8 +58,6 @@ jobs:
       - name: Validate desktop entry
         run: |
           APPID=io.github.marcelogomes90.cosmic-ext-applet-status-hub
-          # Categories=COSMIC; is what every official COSMIC applet ships and is what the
-          # panel expects, but it is not a registered freedesktop category.
           output="$(desktop-file-validate "resources/${APPID}.desktop" || true)"
           output="$(printf '%s\n' "${output}" \
             | grep -v 'unregistered value "COSMIC"' \

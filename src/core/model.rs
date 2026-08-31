@@ -7,6 +7,10 @@ use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Type, Value};
 
 pub const DEFAULT_ITEM_PATH: &str = "/StatusNotifierItem";
 
+const STATUS_ICON_INFIX: &str = "_status_icon_";
+
+const TOOLKIT_STATUS_ICON: &str = "chrome";
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ItemAddress {
     pub service: OwnedBusName,
@@ -65,14 +69,15 @@ impl ItemKey {
         Self { id: id.into(), dup }
     }
 
-    pub fn derive_id(id: &str, title: &str, service: &BusName<'_>) -> String {
+    pub fn derive_id(id: &str, title: &str, tooltip: &str, service: &BusName<'_>) -> String {
         let id = id.trim();
-        if !id.is_empty() {
+        if !id.is_empty() && app_name(id).is_some() {
             return id.to_owned();
         }
-        let title = title.trim();
-        if !title.is_empty() {
-            return title.to_owned();
+        for fallback in [title.trim(), tooltip.trim(), id] {
+            if !fallback.is_empty() {
+                return fallback.to_owned();
+            }
         }
         strip_instance_suffix(service.as_str())
     }
@@ -86,6 +91,16 @@ impl fmt::Display for ItemKey {
             write!(f, "{}#{}", self.id, self.dup)
         }
     }
+}
+
+fn app_name(id: &str) -> Option<&str> {
+    let Some((name, instance)) = id.rsplit_once(STATUS_ICON_INFIX) else {
+        return Some(id);
+    };
+    if instance.is_empty() || !instance.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Some(id);
+    }
+    (!name.eq_ignore_ascii_case(TOOLKIT_STATUS_ICON)).then_some(name)
 }
 
 fn strip_instance_suffix(name: &str) -> String {
@@ -214,16 +229,16 @@ pub struct TrayItem {
 
 impl TrayItem {
     pub fn label(&self) -> &str {
+        if !self.title.is_empty() {
+            return &self.title;
+        }
+        if let Some(name) = app_name(&self.id).filter(|name| !name.is_empty()) {
+            return name;
+        }
         if let Some(tooltip) = &self.tooltip
             && !tooltip.title.is_empty()
         {
             return &tooltip.title;
-        }
-        if !self.title.is_empty() {
-            return &self.title;
-        }
-        if !self.id.is_empty() {
-            return &self.id;
         }
         &self.key.id
     }
@@ -246,18 +261,42 @@ pub struct TraySnapshot {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn the_label_prefers_a_tooltip_title() {
-        let mut item = crate::core::testing::item("slack", 1);
-        item.title = "Slack".to_owned();
-        item.tooltip = Some(ToolTip {
+    fn tooltip(title: &str) -> ToolTip {
+        ToolTip {
             icon_name: String::new(),
             icon_pixmap: Vec::new(),
-            title: "you have a notification".to_owned(),
+            title: title.to_owned(),
             description: String::new(),
-        });
+        }
+    }
 
-        assert_eq!(item.label(), "you have a notification");
+    #[test]
+    fn the_label_prefers_the_title_over_a_tooltip_carrying_status_text() {
+        let mut item = crate::core::testing::item("slack", 1);
+        item.title = "qBittorrent".to_owned();
+        item.tooltip = Some(tooltip("Download speed: 0 B/s"));
+
+        assert_eq!(item.label(), "qBittorrent");
+    }
+
+    #[test]
+    fn a_label_falls_back_to_the_application_inside_the_id() {
+        let mut item = crate::core::testing::item("slack", 1);
+        item.title = String::new();
+        item.id = "Slack_status_icon_1".to_owned();
+        item.tooltip = Some(tooltip("you have a notification"));
+
+        assert_eq!(item.label(), "Slack");
+    }
+
+    #[test]
+    fn a_toolkit_id_names_nothing_and_leaves_the_tooltip_to_label_the_item() {
+        let mut item = crate::core::testing::item("1password", 1);
+        item.title = String::new();
+        item.id = "chrome_status_icon_1".to_owned();
+        item.tooltip = Some(tooltip("1Password"));
+
+        assert_eq!(item.label(), "1Password");
     }
 
     #[test]
@@ -303,11 +342,34 @@ mod tests {
     #[test]
     fn stable_id_prefers_id_then_title_then_stripped_name() {
         let service = BusName::try_from("org.kde.StatusNotifierItem-1234-1").unwrap();
-        assert_eq!(ItemKey::derive_id("steam", "Steam", &service), "steam");
-        assert_eq!(ItemKey::derive_id("  ", "Steam", &service), "Steam");
+        assert_eq!(ItemKey::derive_id("steam", "Steam", "", &service), "steam");
+        assert_eq!(ItemKey::derive_id("  ", "Steam", "", &service), "Steam");
         assert_eq!(
-            ItemKey::derive_id("", "", &service),
+            ItemKey::derive_id("", "", "", &service),
             "org.kde.StatusNotifierItem"
+        );
+    }
+
+    #[test]
+    fn a_toolkit_id_is_too_generic_to_identify_an_application() {
+        let service = BusName::try_from(":1.31835").unwrap();
+
+        assert_eq!(
+            ItemKey::derive_id("chrome_status_icon_1", "", "1Password", &service),
+            "1Password"
+        );
+        assert_eq!(
+            ItemKey::derive_id(
+                "Slack_status_icon_1",
+                "",
+                "you have a notification",
+                &service
+            ),
+            "Slack_status_icon_1"
+        );
+        assert_eq!(
+            ItemKey::derive_id("chrome_status_icon_1", "", "", &service),
+            "chrome_status_icon_1"
         );
     }
 

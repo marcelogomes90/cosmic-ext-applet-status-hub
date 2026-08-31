@@ -1,20 +1,25 @@
 # Architecture
 
 Status Hub is a StatusNotifierHost: it watches the session bus for tray items, resolves their
-properties, and renders them in a COSMIC panel applet. This document describes how the pieces fit
-together and, more importantly, *why* the seams are where they are — several of them exist to
-defend against a specific failure that tray applications cause in practice.
+properties, and renders them in a COSMIC panel applet. This document covers *why* the seams are
+where they are — several exist to defend against a specific failure that tray applications cause in
+practice.
 
 ## Layout
 
 ```
 src/
 ├── core/       the tray itself: D-Bus, lifecycle, ordering. No iced, no libcosmic.
-├── applet/     the COSMIC applet: iced views, popups, icon cache, presentation state,
-│            and the privileged Wayland connection for tokens and window raising.
-├── testkit/    fakes that run on a real throwaway bus (feature = "testkit").
-├── i18n.rs     Fluent catalogue loading.
-└── bin/        cosmic-status-hub-dump, a headless tray dumper.
+│   ├── host.rs registry.rs lifecycle.rs   discovery and arbitration
+│   ├── model.rs ordering.rs menu.rs       wire types, stable order, dbusmenu
+│   └── call.rs proxies.rs icons.rs        timeouts, zbus proxies, icon options
+├── applet/     the COSMIC applet: iced views and presentation state
+│   ├── icons/  mod.rs (lookup + cache), paint.rs (raster), svg.rs (vector)
+│   ├── pins.rs order.rs identity.rs       panel pins, drag order, window matching
+│   └── popup.rs menu_view.rs wayland.rs   surfaces, menus, privileged socket
+├── testkit/    fakes that run on a real throwaway bus (feature = "testkit")
+├── flatpak.rs  recovering icon paths that belong to another sandbox
+└── bin/        cosmic-status-hub-dump, a headless tray dumper
 ```
 
 ## The flow
@@ -40,8 +45,8 @@ org.kde.StatusNotifierWatcher  (D-Bus)
 
 Everything crossing the boundary in the middle is a plain value. The core never calls into the
 applet; it publishes a `TraySnapshot` and an `Option<Arc<MenuModel>>` and lets the UI catch up
-whenever it can. The applet talks back only through `CoreCommand` (`src/core/mod.rs`), a small
-enum with no reply channel.
+whenever it can. The applet talks back only through `CoreCommand` (`src/core/mod.rs`), a small enum
+with no reply channel.
 
 ## Why `Generation` exists
 
@@ -55,45 +60,26 @@ replaced it, and the tray shows a dead application's title and icon indefinitely
 
 Two numbers keep that from happening (`src/core/model.rs`):
 
-- **`DiscoverySeq`** identifies a *slot*. It is allocated once when an item is discovered and is
-  never reused, even after the item is removed.
-- **`Generation`** identifies a *resolve attempt* within a slot. It is allocated from a
-  registry-wide counter and bumped on every refresh.
+- **`DiscoverySeq`** identifies a *slot*. Allocated once at discovery, never reused.
+- **`Generation`** identifies a *resolve attempt* within a slot. Allocated from a registry-wide
+  counter and bumped on every refresh.
 
 Every asynchronous reply carries the `(seq, generation)` it was issued under, and
-`Registry::apply_resolved` / `apply_failure` accept it only if **both** still match. The return
-value says which check rejected it:
+`Registry::apply_resolved` / `apply_failure` accept it only if **both** still match — otherwise the
+reply is dropped as `Stale` (the slot moved on) or `Unknown` (the slot is gone).
+`Registry::begin_refresh` bumps the generation *before* issuing new calls, so a refresh invalidates
+the resolve it interrupts and no cancellation is required.
 
-| `Applied` | Meaning |
-| --- | --- |
-| `Changed` | Applied. The registry revision advances and a new snapshot is published. |
-| `Stale` | The slot exists, but has moved on to a newer generation. Dropped. |
-| `Unknown` | The slot is gone entirely. Dropped. |
-
-`Registry::begin_refresh` bumps the generation *before* issuing new calls, so a refresh
-automatically invalidates the resolve it interrupts — no cancellation is required, and an in-flight
-reply that arrives late is simply `Stale`.
-
-The concrete scenario is pinned by
-`a_reply_from_a_previous_instance_never_touches_its_successor` in `src/core/registry.rs`. It
-discovers `org.example.A` owned by `:1.1`, resolves it, loses the owner, discovers the same service
-now owned by `:1.2`, and resolves that. Then it replays the *old* reply and asserts both defences
-independently:
-
-```rust
-// The old slot is gone.
-assert_eq!(registry.apply_resolved(seq_a, gen_a, props("first")), Applied::Unknown);
-// And even if that reply were misrouted to the new slot, its generation is too old.
-assert_eq!(registry.apply_resolved(seq_b, gen_a, props("first")), Applied::Stale);
-```
-
-Belt and braces on purpose: either check alone would be enough for this case, but the two guard
-different mistakes, and only the pair survives a future refactor of the other.
+`a_reply_from_a_previous_instance_never_touches_its_successor` pins the scenario: one service
+discovered under `:1.1`, resolved, its owner lost, reappearing under `:1.2`, and the old reply
+replayed against both slots — rejected as `Unknown` by the first and `Stale` by the second. Belt and
+braces on purpose: either check alone would cover this case, but the two guard different mistakes,
+and only the pair survives a refactor of the other.
 
 ## Lifecycle states
 
-`src/core/lifecycle.rs` is deliberately tiny and has no dependencies at all — it is pure state
-machine, so its rules can be read in one sitting.
+`src/core/lifecycle.rs` has no dependencies at all — it is a pure state machine, readable in one
+sitting.
 
 | State | Meaning |
 | --- | --- |
@@ -104,137 +90,111 @@ machine, so its rules can be read in one sitting.
 | `Degraded { reason }` | The item failed to answer. **Still visible.** |
 | `Removing` | The owner is gone. Terminal. |
 
-Two rules matter more than the rest:
-
 **`Degraded` does not remove the item.** `is_visible()` excludes only `Removing`. A tray item whose
 application has wedged is still an item the user installed and expects to see; hiding it would
-silently misrepresent the system as having fewer applications running than it does. So a failing
-item stays in the tray, and `a_failing_item_stays_visible_and_does_not_hide_the_others` asserts that
-it does not take its neighbours down with it.
+misrepresent the system as running fewer applications than it does.
+`a_failing_item_stays_visible_and_does_not_hide_the_others` asserts it does not take its neighbours
+down with it.
 
-An item only becomes `Degraded` when it fails to answer *all five* identifying properties (`Id`,
-`Title`, `Status`, `IconName`, `IconPixmap` — see `IDENTIFYING` and `answered` in
-`src/core/mod.rs`). A partial answer is treated as transient and retried on a fixed ladder
-(`RESOLVE_RETRY_DELAYS`, 250 ms → 45 s), because applications routinely stall a subset of their
-properties while starting up.
+An item only becomes `Degraded` when it fails *all five* identifying properties (`IDENTIFYING` in
+`src/core/mod.rs`: `Id`, `Title`, `Status`, `IconName`, `IconPixmap`). A partial answer is treated
+as transient and retried on a fixed ladder (`RESOLVE_RETRY_DELAYS`, 250 ms → 45 s), because
+applications routinely stall a subset of their properties while starting up.
 
 **`Removing` is terminal and absorbing.** The guard at the top of `LifecycleState::apply` returns
-`Removing` for every transition, so no late reply, refresh, or re-announcement can resurrect an item
-whose bus owner has died. This is the second half of the restart defence: `Generation` stops stale
-data from landing, and `Removing` stops a dead slot from coming back.
+`Removing` for every transition, so no late reply or re-announcement can resurrect an item whose bus
+owner has died. `Generation` stops stale data from landing; `Removing` stops a dead slot from
+coming back.
 
-## Ordering is a pure function
+## Order and identity
 
 Panel order must not depend on the order replies happened to arrive, or two panels on two monitors
-would disagree, and a single panel would reshuffle itself on every restart.
+would disagree and a single panel would reshuffle on every restart. `ordering::sort_items` sorts by
+`(position in the remembered list, discovery_seq, key)`, and none of the three terms involves
+timing: `discovery_seq` is assigned at discovery rather than at resolve, `Registry::entries` is a
+`BTreeMap<DiscoverySeq, _>` so iteration starts in discovery order, and the remembered list is a
+bounded (`MAX_REMEMBERED = 64`) list of keys persisted through the `OrderStore` trait — written by
+`applet/order.rs`, which is where dragging a row in the settings list ends up.
+`ordering_is_identical_regardless_of_resolve_order` proves it by resolving three items in three
+permutations and asserting one output.
 
-`ordering::sort_items` sorts by the tuple `(position in the remembered list, discovery_seq, key)`.
-None of the three terms involves timing:
+An item's `ItemKey` is its `Id` plus a `dup` index, so two copies of one application are stably
+`chat` and `chat#1` rather than swapping places between snapshots. `ItemKey::derive_id` refuses one
+`Id`: `chrome_status_icon_<n>`, the placeholder every Chromium and Electron tray publishes unless
+the application overrides it. Left alone it collides — 1Password and Chrome would compete for the
+same key, and whichever was discovered first would inherit the other's pin. Such an item falls
+through to its `Title`, then its tooltip title, which is where those applications put their real
+name.
 
-- `discovery_seq` is monotonic and assigned at discovery, not at resolve.
-- `Registry::entries` is a `BTreeMap<DiscoverySeq, _>`, so iteration is already in discovery order
-  before sorting begins.
-- The remembered list is a bounded (`MAX_REMEMBERED = 64`) list of `ItemKey`s persisted through the
-  `OrderStore` trait.
-
-`ordering_is_identical_regardless_of_resolve_order` proves this by resolving the same three items in
-three different permutations and asserting one output. Duplicate ids get a `dup` index assigned in
-discovery order (`assign_dup_indices`), so two instances of the same application are stably
-distinguished as `chat` and `chat#1` rather than swapping places between snapshots.
+`TrayItem::label` reads the other way round, `Title` first, then the application name inside the
+`Id` (`Slack_status_icon_1` → `Slack`), and only then the tooltip. The tooltip is the last resort
+because applications use it for status text: Slack publishes "you have 1 notification" there and
+qBittorrent publishes its transfer speeds, neither of which is a name.
 
 ## Layer boundaries
 
 Read this before moving code between `core/` and `applet/`.
 
-**The core is built on zbus, and that is fine.** Eight of the ten files under `src/core/` use it;
-even `model.rs` derives `zvariant::Type` on the wire types and uses `zbus::names` for
-`ItemAddress`. The core *is* the D-Bus layer — there is no pretence otherwise.
+**The core is built on zbus, and that is fine.** Eight of its eleven files use it;
+even `model.rs` derives `zvariant::Type` on the wire types. The core *is* the D-Bus layer.
 
-**The core is completely free of iced and libcosmic, and that is load-bearing.** There is no
-`use cosmic::` anywhere under `src/core/`; the only match for "iced" is a comment in `icons.rs`
-explaining pixmap byte order. This is what lets the entire tray be tested against a real bus without
-constructing a display server or an iced runtime — `cargo test --features testkit` exercises
-discovery, lifecycle, ordering, and menus with no compositor in sight.
-
-**Dependencies point one way.** `applet → core` and `testkit → core`; nothing points back. The check
-is mechanical:
+**The core is free of iced and libcosmic, and that is load-bearing.** This is what lets the entire
+tray be tested against a real bus without a display server or an iced runtime. The check is
+mechanical:
 
 ```sh
 grep -rn "use crate::" src/core/ | grep -v "use crate::core"   # must print nothing
 grep -rn "cosmic::" src/core/                                  # must print nothing
-grep -rni "iced" src/core/                                     # must find only that one comment
 ```
 
-A consequence worth stating explicitly, because it is a decision rather than an accident:
-**presentation state stays out of the core.** Remembered *ordering* lives in the core because it has
-to be computed where the snapshot is assembled, alongside duplicate indices and discovery
-sequences. Anything that is merely a filter or a preference over an already-built snapshot belongs
-in `applet/`, even when putting it in the core would be marginally more convenient. Moving config
-handling into the core would erode the boundary above, and the test story goes with it.
+**Dependencies point one way:** `applet → core` and `testkit → core`; nothing points back. A
+consequence worth stating, because it is a decision rather than an accident: **presentation state
+stays out of the core.** Remembered *ordering* lives in the core because it has to be computed where
+the snapshot is assembled, alongside duplicate indices and discovery sequences. Anything that is
+merely a filter or a preference over an already-built snapshot — pins, drafts — belongs in
+`applet/`, even when the core would be marginally more convenient.
 
 ## The applet's popup surfaces
 
-The hub and a context menu opened from one of its items share one Wayland surface and one card, with
-a divider between them. Their order follows the panel anchor so the hub content always stays nearest
-the panel. Keeping everything in one `xdg_popup` avoids competing close events and prevents the hub
-button from being exposed underneath a stale child popup.
+The hub and a context menu opened from one of its items share one Wayland surface and one card,
+with a divider between them, ordered so the hub content stays nearest the panel. Keeping both in
+one `xdg_popup` avoids competing close events and stops the hub button being exposed underneath a
+stale child popup.
 
-A menu opened from an item already pinned to the panel is necessarily its own popup, parented to the
-panel window and anchored to that item's slot. The `...` button sits at the outer end of the strip,
-the end facing away from the screen centre, and pinned items grow inward from it. Which end that is
-depends on the group the applet was placed in, read once at startup from the panel's own
-`plugins_wings` and `plugins_center`: leading for the start wing, trailing for the end wing and for
-the centre, where a centred block has no fixed edge at all and half a button of drift is
-unavoidable.
+A menu opened from an item already pinned to the panel is necessarily its own popup, parented to
+the panel window and anchored to that item's slot. The `...` button sits at the outer end of the
+strip — the end facing away from the screen centre — and pinned items grow inward from it. Which
+end that is comes from the panel's own `plugins_wings` and `plugins_center`, read once at startup:
+leading for the start wing, trailing for the end wing and for the centre, where a centred block has
+no fixed edge and half a button of drift is unavoidable.
 
-The main popup is non-reactive, so resizing its parent cannot make the compositor reinterpret a
-stale anchor, and pin changes never issue a reposition request. They do not need to: the settings
-view edits a draft, so nothing reaches the panel while the popup is up. Saving commits the draft and
-closes the popup in one step, and dismissing the popup discards it. The panel is therefore static
-for as long as anything is anchored to it, which makes the anchor correct by construction instead of
-by compensation.
+The main popup is non-reactive and pin changes never issue a reposition request, so the compositor
+cannot reinterpret a stale anchor. They do not need to: the settings view edits a draft, so nothing
+reaches the panel while the popup is up. Saving commits and closes in one step; dismissing discards.
+The panel is static for as long as anything is anchored to it, which makes the anchor correct by
+construction rather than by compensation.
 
-Panel bounds are treated as a maximum on the panel's major axis, not as a mandatory size. Each
-instance shows only the pinned items that fit in its monitor's current bounds, always reserving one
-slot for the hub; excess pinned items stay available in that instance's popup. This also lets the
-autosizer request the smaller natural size as soon as items are unpinned instead of retaining an
-empty allocation left by overflow.
+Panel bounds are a maximum on the major axis, not a mandatory size. Each instance shows only the
+pinned items that fit its monitor's bounds, always reserving one slot for the hub; the rest stay in
+that instance's popup. Any number of items can be pinned — the panel already decides how many it
+shows, so a cap on the stored list would only refuse pins the user could reach anyway by unpinning
+something else. Pins live in `cosmic_config` and every instance watches it, so pinning on one
+monitor reaches the others.
 
-The hub body height is decided in Rust from its current rows and padding. `Length::Fixed` ignores a
-container's intrinsic size, so `HubLayout` reserves the menu divider and at least one pixel of menu
-space before allocating the body. The menu is scrollable within the remaining height budget,
-keeping the combined surface under the popup ceiling.
-
-Pinned items are applet state, deliberately kept out of the core (see above). They are stored
-through `cosmic_config` and each panel instance watches that config, so pinning on one monitor
-reaches the others.
-
-The Flatpak is Wayland-only, so it does not share the host IPC namespace (that permission is for
-X11 shared memory). DRI remains available for iced/wgpu rendering, and the session bus cannot be
-narrowed to a fixed list because a StatusNotifierHost must receive registrations and call items
-under arbitrary application bus names.
-
-The read-only filesystem grants are only what icon resolution cannot reach otherwise. Flatpak
-already exposes the host's system and user icon themes on `XDG_DATA_DIRS`, at `/run/host/share`
-and `/run/host/user-share`, without any permission at all, so no grant asks for those. What it
-leaves out is `<installation>/exports/share/icons`, where applications publish the icons they name;
-`extend_data_dirs` (`src/lib.rs`) appends those trees to the value Flatpak set rather than replacing
-it, which is what keeps the free host themes in the search path. Each entry there is a symlink into
-`<installation>/app/<id>/current/active/export`, so the app tree is granted alongside them or every
-link dangles. `~/.icons` is granted because that legacy path is a real search root nothing else
-covers. The only writable grant is this applet's own COSMIC configuration directory, where pins are
-stored.
+`HubLayout` computes the body height in Rust, because `Length::Fixed` ignores a container's
+intrinsic size: it reserves the divider and at least one pixel of menu space before allocating the
+body, and the menu scrolls within what is left.
 
 ## Icon resolution
 
-Which property is read depends on the kind and the item's status: an overlay reads `OverlayIcon*`, a
-`NeedsAttention` item reads `AttentionIcon*` — falling back to the ordinary `Icon*` when it publishes
-neither an attention name nor a valid attention pixmap — and everything else reads
-`IconName`/`IconPixmap`. A name beginning with `/` is treated as an absolute path, not a theme name.
+Which property is read depends on the kind and the item's status: an overlay reads `OverlayIcon*`,
+a `NeedsAttention` item reads `AttentionIcon*` — falling back to the ordinary `Icon*` when it
+publishes neither an attention name nor a valid attention pixmap — and everything else reads
+`IconName`/`IconPixmap`. A name beginning with `/` is an absolute path, not a theme name.
 
-The lookup then runs in a fixed order (`applet/icons.rs`):
+The lookup runs in a fixed order (`applet/icons/mod.rs`):
 
-1. the name in the user's icon theme, including its progressively shorter name fallbacks, with SVG
+1. the name in the user's icon theme, including its progressively shorter name fallbacks, SVG
    preferred over raster;
 2. the name under the item's own `IconThemePath`, accepted only if the result really lives there;
 3. the absolute path the item published, if the value is a path and the file exists;
@@ -242,93 +202,82 @@ The lookup then runs in a fixed order (`applet/icons.rs`):
    target and otherwise the largest available;
 5. `application-default`, then `application-x-executable`.
 
-A relative name and an absolute path are mutually exclusive interpretations of `IconName`, so step
-3 is a separate branch rather than a candidate that can displace a themed relative name. Completing
-the global theme lookup before consulting `IconThemePath` is deliberate: visual consistency with
-the user's chosen theme wins even when the match is a shorter, more generic name.
-
-Steps 2 and 3 also resolve a path this process cannot read (`src/flatpak.rs`). An application in a
-Flatpak names its icon directory either from inside its own sandbox, `/app/...`, or under the
-per-application data directory, and neither is reachable from here — but the same artwork ships in
-that application's payload, which is. The owner is recovered two ways: a path under
-`<home>/.var/app/<app id>/` names the application outright, while a `/app/<tail>` path is matched
-against the payloads of installed applications. **That match must be unique or it is refused.** A
-tail like `share/icons` is shipped by nearly every application — 30 of 31 on the machine this was
-measured on — and serving another application's artwork is worse than serving none, so anything but
-a single candidate falls through to the next step. Once the owner is known the search covers the
-translated tail plus `share/icons` and `share/pixmaps`, the same pair the freedesktop lookup derives
-from any data directory. Each candidate is canonicalised first: a payload is reached through the
-`current` and `active` symlinks, and the walker canonicalises the roots it is handed, so the guard
-that keeps a result inside its own root would otherwise reject every match.
-
-This only runs when the published path does not exist, which leaves every item that resolves today
-untouched and makes the whole branch inert outside a sandbox. A raster recovered this way is passed
-through the same adaptation as a published pixmap, because the application drew it for its own panel
-rather than for this theme; a file found where the application said it would be keeps the appearance
-it always had.
-
-Painting is deliberately conservative. An SVG is symbolic when its name ends in `-symbolic`, or
-when its live paint rules describe at most one achromatic ink; multi-tone, coloured, embedded, or
-unrecognised content keeps its original appearance.
-
-A raster is adapted only when it has a transparent margin and cannot already be read on the panel.
-Artwork keeps its published appearance when most of its ink already clears 3:1 against the panel
-background, or when a meaningful share does *and* that share traces the whole shape. Both halves are
-needed. Judging by the average tone fails where it matters most: a black glyph inside a thick white
-outline averages to a mid grey that contrasts with nothing, while both of its real tones read on any
-panel. Judging by share alone fails the other way: a white icon with a small dark glyph in the middle
-clears the share test while the rest of it disappears, so the legible ink is also required to span
-most of the artwork's extent rather than sit as a detail inside it.
-
-Legibility and the representative tone are measured on the opaque core, the pixels at nine tenths of
-the artwork's own peak alpha or above, because antialiasing is coverage rather than content and
-should not vote on how the artwork reads. Whether the artwork is tonal is decided on every visible
-pixel instead: a light disc drawn with a darker outline carries that outline below the core's alpha,
-and treating it as single-tone flattens the whole icon into one solid shape.
-
-Single-tone achromatic silhouettes receive the theme foreground directly. Multi-tone achromatic
-artwork is translated onto the theme foreground: each tone keeps its own distance from the
-alpha-weighted representative tone, capped so no detail runs away, so the published tonal structure
-survives at its original width instead of being stretched to fill a fixed range. Alpha is never
-changed, including fully transparent cutouts and partially transparent antialiasing.
-
-A compact chromatic region touching an image edge is treated as a possible badge. Its complete
-bounding region, plus a small safety margin, is kept untouched (including achromatic text and
-antialiasing inside it), but the base outside that region is adapted only when it is single-tone. If
-the base itself is multi-tone, changing one part while freezing the badge is too likely to split one
-piece of artwork, so the whole pixmap is kept as published. A chromatic region that is large,
-dispersed, central, or leaves no independently paintable base is likewise preserved in full. This
-lets a plainly separable badge coexist with a symbolic base without interpreting ordinary
-multicolour application art as symbolic.
+A relative name and an absolute path are mutually exclusive readings of `IconName`, so step 3 is a
+separate branch rather than a candidate that can displace a themed name. Completing the global theme
+lookup before consulting `IconThemePath` is a deliberate trade: consistency with the theme the user
+chose wins, at the cost of a theme carrying a shorter fallback name beating the exact file the
+application shipped.
 
 Many applications publish no icon name at all, so step 4 is a common outcome rather than a last
-resort. Only step 5 is marked as a fallback, and that flag drives the retry ladder: a fallback entry
-is resolved again on a schedule stretching to about a minute, for applications that register an item
-before publishing its icon. The cache is keyed by `(address, generation, kind, size)`, so a fresh
-resolve of the item invalidates its icon with no explicit invalidation anywhere. A change to the
-icon theme, panel background, or foreground also clears the cache so both asset selection and
-recoloured pixmaps follow the active theme.
+resort. Only step 5 is flagged as a fallback, and that flag drives a retry ladder stretching to
+about a minute, for applications that register an item before publishing its icon. The cache is
+keyed by `(address, generation, kind, size)`, so a fresh resolve invalidates an item's icon with no
+explicit invalidation anywhere; a change of icon theme or panel colours clears it outright.
 
-Placing the complete theme lookup ahead of `IconThemePath` is a deliberate trade: it keeps the tray
-consistent with the theme the user chose, at the cost of a theme carrying a shorter fallback name
-winning over the exact file the application shipped.
+### Reaching another sandbox's artwork
+
+Steps 2 and 3 also resolve paths this process cannot read (`src/flatpak.rs`). An application in a
+Flatpak names its icon directory from inside its own sandbox, `/app/...`, or under its
+per-application data directory — neither reachable from here, though the same artwork ships in that
+application's payload, which is. A path under `<home>/.var/app/<app id>/` names its owner outright;
+a `/app/<tail>` path is matched against the payloads of installed applications, and **that match
+must be unique or it is refused**, because a tail like `share/icons` is shipped by nearly every
+application (30 of 31 on the machine this was measured on) and serving the wrong artwork is worse
+than serving none. The branch only runs when the published path does not exist, so it is inert
+outside a sandbox.
+
+### Painting
+
+Every icon is painted to the panel's foreground ink. The tray is a row of glyphs beside the clock
+and the battery, not a row of application logos, and an icon left in its published colours is
+legible on one theme and invisible on the other.
+
+A raster is analysed in Oklab (`applet/icons/paint.rs`). Art larger than the panel size is shrunk
+first — the tone analysis reads the same shape either way, and a 256×256 pixmap costs about 0.8 ms
+to paint instead of 6.4 ms, which matters because painting happens inside `view()`. The lightness
+span is measured over the opaque core, the pixels at nine tenths of the artwork's own peak alpha or
+above, because antialiasing is coverage rather than content and should not vote on how the artwork
+reads.
+
+Below `MIN_LIGHTNESS_SPAN` the artwork is a silhouette and every pixel becomes the ink exactly.
+Above it, each pixel keeps its relative lightness, **anchored at the end nearest the ink**: the
+lightest tone lands on the ink on a dark panel, the darkest does on a light one, and everything else
+travels away from the panel by at most `MAX_TINT_SHIFT`. The direction is the whole point. Shading
+centred on the ink runs both ways, so on a dark panel the dark half of the artwork sinks toward the
+background and on a light panel the light half washes out — which is exactly the detail the artwork
+was drawn to show. Anchoring means no tone can move toward the panel past a fixed budget, and
+`TINT_GAIN` keeps about two thirds of the original separation within that budget rather than
+stretching every icon to fill it. Hue and chroma come from the ink, so a coloured foreground stays
+that colour instead of drifting as it lightens. Recolouring never changes alpha, cutouts and
+antialiasing included; the resize that follows smooths alpha alone.
+
+A vector is symbolic outright when its name ends in `-symbolic`. Otherwise it is rendered to 32×32
+and measured the same way (`applet/icons/svg.rs`): one achromatic ink means symbolic, anything else
+gets an `feColorMatrix` applying that same anchored ramp in sRGB. Rendering rather than reading the
+markup is deliberate — resvg is the renderer iced already draws these files with, so the measurement
+is of what will actually appear, and CSS, dead style rules, gradients and masks need no parser of
+our own. A file whose markup embeds a raster is refused up front, because the measurement would not
+see it; a file that draws nothing is treated as a single ink.
+
+A compact chromatic region touching an image edge is treated as a badge and keeps its published
+colours, text and antialiasing included. Its mask is the intersection of the row and column spans of
+its coloured pixels rather than their bounding box, so a diamond or a circle protects its own
+interior without freezing the corners around it.
 
 ## Raising the window a tray item stands for
 
 The SNI spec has no way to say "show your window". A host calls `Activate` and the application is
-expected to raise itself. Under Wayland it cannot: focus only arrives with an xdg-activation token
+expected to raise itself. Under Wayland it cannot: focus arrives only with an xdg-activation token
 handed over by whoever owns the input event, and a minimized toplevel cannot unminimize itself at
 all. The KDE extension for this is `ProvideXdgActivationToken`, which the applet calls before every
-`Activate` and every menu `Event(clicked)`.
-
-That is the whole of what Plasma does, and all any tray host does. The design intent is that an
-application cannot take focus, only receive it — so the application, not the host, decides whether a
-given menu entry should show a window.
+`Activate` and every menu `Event(clicked)`. That is the whole of what Plasma does. The design intent
+is that an application cannot take focus, only receive it — so the application, not the host,
+decides whether a given menu entry should show a window.
 
 Chromium and Electron trays do not implement the method. They drop the token and the click appears
 to do nothing, so for those the applet raises the window itself. `core::resolve` introspects each
-item alongside its properties; an interface listing `ProvideXdgActivationToken` is left to decide for
-itself. A sandboxed application whose `xdg-dbus-proxy` answers `<node/>` reads as not taking the
+item alongside its properties; an interface listing `ProvideXdgActivationToken` is left to decide
+for itself. A sandboxed application whose `xdg-dbus-proxy` answers `<node/>` reads as not taking the
 token and falls into the rescue, which is the harmless direction.
 
 The rescue runs over the panel's privileged Wayland socket (`X_PRIVILEGED_WAYLAND_SOCKET`), which
@@ -349,9 +298,7 @@ decides:
 
 `Raise` follows capability, never the wording of a menu entry:
 
-- **left click** → `Raise::Unfocused`, pulling forward even a window that is merely out of focus.
-  The request is unambiguous, and it covers a compositor that will not unminimize through
-  xdg-activation alone.
+- **left click** → `Raise::Unfocused`, pulling forward even a window merely out of focus.
 - **menu entry, item takes the token** → no request at all.
 - **menu entry, item does not** → `Raise::Minimized`. The application had no way to act.
 - **submenu, or an entry carrying a `toggle-type`** → `Raise::Changed`, which acts on the first two
@@ -360,13 +307,13 @@ decides:
 
 Reading the label was tried twice and failed both ways round: an allow-list of show verbs held back
 "Show/Hide" and "Biblioteca", a deny-list of action verbs let nearly everything through. dbusmenu
-carries nothing that separates them — OBS publishes "Iniciar gravação" with a label, `enabled` and
-`visible` and nothing else, exactly as Steam publishes "Biblioteca".
+carries nothing that separates them — OBS publishes "Iniciar gravação" with exactly the fields Steam
+publishes "Biblioteca" with.
 
-Matching an item to a toplevel is still a heuristic (`applet/identity.rs`): the item's `Id`,
-`Title`, tooltip title and icon name are split into segments, generic words dropped, and what
-survives scored against each toplevel's `app_id` and `title`. The process id would be exact but is
-useless here — for a Flatpak application `GetConnectionUnixProcessID` reports its `xdg-dbus-proxy`.
+Matching an item to a toplevel is a heuristic (`applet/identity.rs`): the item's `Id`, `Title`,
+tooltip title and icon name are split into segments, generic words dropped, and what survives scored
+against each toplevel's `app_id` and `title`. The process id would be exact but is useless here —
+for a Flatpak application `GetConnectionUnixProcessID` reports its `xdg-dbus-proxy`.
 
 ## Failure handling, briefly
 
@@ -378,7 +325,36 @@ useless here — for a Flatpak application `GetConnectionUnixProcessID` reports 
   panels do not stampede), but does **not** drop the items.
 - **Signals are subscribed before state is read.** `host::connect` subscribes to the registered and
   unregistered streams *before* calling `RegisterStatusNotifierHost` and *before* reading
-  `RegisteredStatusNotifierItems`, so no registration can slip through the gap between the two.
+  `RegisteredStatusNotifierItems`, so no registration slips through the gap between the two.
+
+## Packaging
+
+The Flatpak is Wayland-only, so it does not share the host IPC namespace (that permission is for X11
+shared memory). DRI stays for iced/wgpu rendering, and the session bus cannot be narrowed to a fixed
+list because a StatusNotifierHost must receive registrations from, and call items under, arbitrary
+application bus names.
+
+The read-only filesystem grants are only what icon resolution cannot reach otherwise. Flatpak
+already exposes the host's system and user icon themes on `XDG_DATA_DIRS`, at `/run/host/share` and
+`/run/host/user-share`, without any permission at all, so nothing asks for those. What it leaves out
+is `<installation>/exports/share/icons`, where applications publish the icons they name;
+`extend_data_dirs` (`src/lib.rs`) appends those trees to the value Flatpak set rather than replacing
+it, which is what keeps the free host themes in the search path. Each entry there is a symlink into
+`<installation>/app/<id>/current/active/export`, so the app tree is granted alongside them or every
+link dangles. `~/.icons` is granted because that legacy path is a real search root nothing else
+covers. The only writable grant is this applet's own COSMIC configuration directory.
+
+Two rules keep the offline build working:
+
+**Do not pin a `rev` on the libcosmic dependency.** `cosmic-panel-config` reaches `cosmic-config`
+through the bare libcosmic URL, and a `rev` makes that a second, distinct Cargo source for the same
+repository. `flatpak-cargo-generator` emits one source replacement per URL, so the offline build
+then cannot resolve the unpinned copy. `Cargo.lock` already pins the exact commit, so builds stay
+reproducible without it.
+
+**Regenerate `cargo-sources.json` whenever `Cargo.lock` gains a package** — `just flatpak-sources`.
+Adding a dependency that is already in the tree does not: the generator enumerates the packages in
+the lock file, so a new edge to a crate that is already vendored changes nothing.
 
 ## How to test
 
@@ -400,5 +376,6 @@ just run-dump  # headless: dump the live session tray
 
 Unit tests live at the bottom of the module they cover, in a `#[cfg(test)] mod tests`, and are named
 as sentences describing the invariant (`a_refresh_supersedes_the_resolve_it_interrupts`) rather than
-after the function under test. Integration tests live in `tests/` and share `tests/common/mod.rs`,
-whose `wait_for` helper renders the current snapshot into the panic message on timeout.
+after the function under test. `applet/icons/` shares its fixtures through `icons/testing.rs`.
+Integration tests live in `tests/` and share `tests/common/mod.rs`, whose `wait_for` helper renders
+the current snapshot into the panic message on timeout.

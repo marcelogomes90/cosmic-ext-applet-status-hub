@@ -6,7 +6,7 @@ mod menu;
 mod watcher;
 
 pub use bus::PrivateBus;
-pub use item::{FakeItem, ItemBehaviour, ItemHandle};
+pub use item::{FakeItem, ItemBehaviour, ItemHandle, THEME_PATH};
 pub use menu::{FakeMenu, MENU_PATH, MenuBehaviour};
 pub use watcher::{FakeCosmicWatcher, FakeWatcher};
 

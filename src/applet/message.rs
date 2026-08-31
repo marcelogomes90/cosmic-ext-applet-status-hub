@@ -21,7 +21,11 @@ pub enum Message {
     SaveSettings,
     DismissMenu,
     PinsChanged(crate::applet::pins::Pins),
+    OrderChanged(crate::applet::order::Order),
     TogglePin(ItemKey),
+    DragStart(ItemKey),
+    DragOver(ItemKey),
+    DragEnd,
     Wayland(WaylandUpdate),
     Relayout,
 }

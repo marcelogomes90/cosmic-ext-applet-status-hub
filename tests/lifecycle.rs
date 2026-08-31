@@ -406,3 +406,36 @@ async fn an_item_that_answers_only_some_properties_is_asked_again() {
     assert!(complete.state.is_resolved());
     assert_eq!(complete.key.id, "half");
 }
+
+#[tokio::test]
+async fn an_item_that_answers_one_property_at_a_time_still_resolves_completely() {
+    let bus = PrivateBus::start().unwrap();
+    let watcher_connection = bus.connect().await.unwrap();
+    FakeWatcher::serve(&watcher_connection).await.unwrap();
+
+    let (handle, _join) = core::spawn_on(
+        &tokio::runtime::Handle::current(),
+        MemoryOrderStore::default(),
+        bus.connect().await.unwrap(),
+    );
+    let mut snapshots = handle.subscribe();
+
+    let connection = bus.connect().await.unwrap();
+    ItemHandle::publish(&connection, "serial", ItemBehaviour::OneCallAtATime, None)
+        .await
+        .unwrap();
+
+    let snapshot = wait_for(&mut snapshots, "the serialising item", |s| {
+        s.items.iter().any(|item| item.key.id == "serial")
+    })
+    .await;
+
+    let item = &snapshot.items[0];
+    assert_eq!(item.icon.icon_name, "application-default");
+    assert_eq!(
+        item.icon.theme_path.as_deref(),
+        Some(cosmic_status_hub::testkit::THEME_PATH)
+    );
+    assert!(item.menu_path.is_some());
+    assert!(item.state.is_resolved());
+}

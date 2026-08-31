@@ -13,13 +13,57 @@ pub fn sort_items(items: &mut [TrayItem], remembered: &[ItemKey]) {
 }
 
 pub fn remembered_after(baseline: &[ItemKey], sorted_items: &[TrayItem]) -> Vec<ItemKey> {
-    let mut merged: Vec<ItemKey> = sorted_items.iter().map(|item| item.key.clone()).collect();
-    let absent: Vec<ItemKey> = baseline
-        .iter()
-        .filter(|key| !merged.contains(key))
-        .cloned()
-        .collect();
-    merged.extend(absent);
+    let live: Vec<ItemKey> = sorted_items.iter().map(|item| item.key.clone()).collect();
+    let mut merged: Vec<ItemKey> = Vec::with_capacity(baseline.len() + live.len());
+    let mut showing = live.iter();
+
+    for key in baseline {
+        if live.contains(key) {
+            for shown in showing.by_ref() {
+                push_once(&mut merged, shown);
+                if shown == key {
+                    break;
+                }
+            }
+        } else {
+            push_once(&mut merged, key);
+        }
+    }
+    for shown in showing {
+        push_once(&mut merged, shown);
+    }
+
+    cap(merged, &live)
+}
+
+fn push_once(merged: &mut Vec<ItemKey>, key: &ItemKey) {
+    if !merged.contains(key) {
+        merged.push(key.clone());
+    }
+}
+
+fn cap(mut merged: Vec<ItemKey>, live: &[ItemKey]) -> Vec<ItemKey> {
+    if merged.len() <= MAX_REMEMBERED {
+        return merged;
+    }
+
+    let mut absent_budget = MAX_REMEMBERED.saturating_sub(live.len());
+    merged.retain(|key| {
+        live.contains(key) || {
+            let room = absent_budget > 0;
+            absent_budget = absent_budget.saturating_sub(1);
+            room
+        }
+    });
+    merged.truncate(MAX_REMEMBERED);
+    merged
+}
+
+pub fn merge_remembered(chosen: &[ItemKey], baseline: &[ItemKey]) -> Vec<ItemKey> {
+    let mut merged: Vec<ItemKey> = Vec::with_capacity(chosen.len() + baseline.len());
+    for key in chosen.iter().chain(baseline) {
+        push_once(&mut merged, key);
+    }
     merged.truncate(MAX_REMEMBERED);
     merged
 }
@@ -99,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn remembering_puts_live_items_first_and_keeps_absent_ones() {
+    fn an_absent_item_keeps_the_slot_it_had() {
         let baseline = vec![ItemKey::new("steam", 0), ItemKey::new("nextcloud", 0)];
         let mut items = vec![item("discord", 2), item("steam", 1)];
         sort_items(&mut items, &baseline);
@@ -108,9 +152,32 @@ mod tests {
             remembered_after(&baseline, &items),
             vec![
                 ItemKey::new("steam", 0),
-                ItemKey::new("discord", 0),
                 ItemKey::new("nextcloud", 0),
-            ]
+                ItemKey::new("discord", 0),
+            ],
+            "nextcloud is not running, but it was remembered before discord was ever seen"
+        );
+    }
+
+    #[test]
+    fn closing_an_application_does_not_move_it_to_the_back() {
+        let chosen = vec![
+            ItemKey::new("vpn", 0),
+            ItemKey::new("chat", 0),
+            ItemKey::new("music", 0),
+        ];
+
+        let mut still_running = vec![item("vpn", 1), item("music", 3)];
+        sort_items(&mut still_running, &chosen);
+        let while_closed = remembered_after(&chosen, &still_running);
+        assert_eq!(while_closed, chosen, "the slot is held open");
+
+        let mut back = vec![item("vpn", 1), item("music", 3), item("chat", 9)];
+        sort_items(&mut back, &while_closed);
+        assert_eq!(
+            keys(&back),
+            ["vpn", "chat", "music"],
+            "it reopens where it was, not after everything discovered since"
         );
     }
 
@@ -135,17 +202,22 @@ mod tests {
     }
 
     #[test]
-    fn remembering_is_bounded() {
+    fn remembering_is_bounded_and_spends_the_room_on_what_is_running() {
         let baseline: Vec<ItemKey> = (0..MAX_REMEMBERED + 10)
             .map(|i| ItemKey::new(format!("old-{i}"), 0))
             .collect();
         let items = vec![item("live", 1)];
         let merged = remembered_after(&baseline, &items);
+
         assert_eq!(merged.len(), MAX_REMEMBERED);
+        assert!(
+            merged.contains(&ItemKey::new("live", 0)),
+            "a running application never loses its slot to one that only left a slot behind"
+        );
         assert_eq!(
             merged[0],
-            ItemKey::new("live", 0),
-            "live items are never evicted"
+            ItemKey::new("old-0", 0),
+            "the slots that survive are the earliest ones, in the order they were remembered"
         );
     }
 

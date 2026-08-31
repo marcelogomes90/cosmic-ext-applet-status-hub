@@ -289,3 +289,49 @@ async fn the_tray_survives_the_watcher_disappearing_and_returning() {
         "the host re-registers after reconnecting"
     );
 }
+
+#[tokio::test]
+async fn a_chosen_order_reaches_the_store_and_keeps_absent_applications() {
+    let bus = PrivateBus::start().unwrap();
+    let watcher_connection = bus.connect().await.unwrap();
+    FakeWatcher::serve(&watcher_connection).await.unwrap();
+
+    let runtime = tokio::runtime::Handle::current();
+    let order = SharedOrder(Arc::new(Mutex::new(vec![ItemKey::new("nextcloud", 0)])));
+
+    let (host, _join) = core::spawn_on(&runtime, order.clone(), bus.connect().await.unwrap());
+    let mut view = host.subscribe();
+
+    let mut connections = Vec::new();
+    for id in ["steam", "discord", "telegram"] {
+        let connection = bus.connect().await.unwrap();
+        ItemHandle::publish(&connection, id, ItemBehaviour::Normal, None)
+            .await
+            .unwrap();
+        connections.push(connection);
+    }
+    wait_for(&mut view, "three items", |s| s.items.len() == 3).await;
+
+    host.send(core::CoreCommand::SetRemembered(vec![
+        ItemKey::new("telegram", 0),
+        ItemKey::new("steam", 0),
+        ItemKey::new("discord", 0),
+    ]));
+
+    let arranged = wait_for(&mut view, "the chosen order", |s| {
+        keys(s) == ["telegram", "steam", "discord"]
+    })
+    .await;
+    assert_eq!(keys(&arranged), ["telegram", "steam", "discord"]);
+
+    wait_until("the order to reach the store", || order.load().len() == 4).await;
+    assert_eq!(
+        order
+            .load()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        ["telegram", "steam", "discord", "nextcloud"],
+        "an application that is not running keeps the slot it had"
+    );
+}

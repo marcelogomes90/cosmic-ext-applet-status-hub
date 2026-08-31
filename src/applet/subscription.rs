@@ -71,3 +71,12 @@ pub fn pins() -> Subscription<Message> {
     )
     .map(|update| Message::PinsChanged(update.config))
 }
+
+pub fn order() -> Subscription<Message> {
+    cosmic::cosmic_config::config_subscription::<_, crate::applet::order::Order>(
+        "cosmic-status-hub-order",
+        crate::APP_ID.into(),
+        crate::applet::pins::CONFIG_VERSION,
+    )
+    .map(|update| Message::OrderChanged(update.config))
+}

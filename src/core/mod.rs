@@ -35,13 +35,15 @@ use crate::core::registry::{Applied, Registry, ResolvedProps};
 use zbus::zvariant::OwnedObjectPath;
 
 const PERSIST_DEBOUNCE: Duration = Duration::from_secs(2);
-const RESOLVE_RETRY_DELAYS: [Duration; 6] = [
+const RESOLVE_RETRY_DELAYS: [Duration; 8] = [
     Duration::from_millis(250),
     Duration::from_secs(1),
     Duration::from_secs(3),
     Duration::from_secs(8),
     Duration::from_secs(20),
     Duration::from_secs(45),
+    Duration::from_secs(90),
+    Duration::from_mins(3),
 ];
 
 pub trait OrderStore: Send + 'static {
@@ -708,6 +710,7 @@ impl<S: OrderStore> Core<S> {
                         stream_or_empty(proxy.receive_new_title().await).map(|_| ()),
                         stream_or_empty(proxy.receive_new_tool_tip().await).map(|_| ()),
                         stream_or_empty(proxy.receive_new_status().await).map(|_| ()),
+                        stream_or_empty(proxy.receive_new_icon_theme_path().await).map(|_| ()),
                     );
                     Some(merged)
                 }
@@ -754,7 +757,7 @@ impl<S: OrderStore> Core<S> {
 
     fn dispatch(&mut self, connection: &zbus::Connection, command: CoreCommand) {
         match command {
-            CoreCommand::SetRemembered(order) => self.adopt_order(order),
+            CoreCommand::SetRemembered(order) => self.adopt_order(&order),
 
             CoreCommand::Primary { address, token } => {
                 self.dispatch_primary(connection, address, token);
@@ -842,14 +845,20 @@ impl<S: OrderStore> Core<S> {
     }
 
     fn dispatch_context(&mut self, connection: &zbus::Connection, address: ItemAddress) {
-        let Some((_, _, props)) = self.item_for(&address) else {
+        let Some((seq, _, props)) = self.item_for(&address) else {
             return;
         };
         if props.menu_path.is_some() {
             self.open_menu(connection, &address);
         } else {
-            spawn_action(connection, address, |proxy| async move {
-                with_timeout(ACTION_TIMEOUT, "ContextMenu", proxy.context_menu(0, 0)).await
+            let tx = self.internal_tx.clone();
+            spawn_action(connection, address, move |proxy| async move {
+                let result =
+                    with_timeout(ACTION_TIMEOUT, "ContextMenu", proxy.context_menu(0, 0)).await;
+                if result.as_ref().is_err_and(|err| !err.is_transient()) {
+                    let _ = tx.send(Event::Changed { seq }).await;
+                }
+                result
             });
         }
     }
@@ -1037,9 +1046,17 @@ impl<S: OrderStore> Core<S> {
         let _ = self.snapshots.send(Arc::new(snapshot));
     }
 
-    fn adopt_order(&mut self, order: Vec<ItemKey>) {
-        self.registry.set_remembered(order.clone());
-        self.to_persist = order;
+    fn adopt_order(&mut self, order: &[ItemKey]) {
+        let merged = ordering::merge_remembered(order, self.registry.remembered());
+        if merged == self.to_persist && merged == self.registry.remembered() {
+            return;
+        }
+
+        self.registry.set_remembered(merged.clone());
+        self.to_persist = merged;
+        self.persist_at
+            .get_or_insert_with(|| Instant::now() + PERSIST_DEBOUNCE);
+
         let snapshot = self.registry.snapshot(self.watcher.clone());
         let _ = self.snapshots.send(Arc::new(snapshot));
     }
@@ -1068,117 +1085,132 @@ async fn item_proxy(
     StatusNotifierItemProxy::builder(connection)
         .destination(address.service.clone())?
         .path(address.path.clone())?
-        // SNI implementations announce New* signals instead of PropertiesChanged.
         .cache_properties(zbus::proxy::CacheProperties::No)
         .build()
         .await
 }
 
-const IDENTIFYING: usize = 5;
+async fn properties_proxy(
+    connection: &zbus::Connection,
+    address: &ItemAddress,
+) -> zbus::Result<zbus::fdo::PropertiesProxy<'static>> {
+    zbus::fdo::PropertiesProxy::builder(connection)
+        .destination(address.service.clone())?
+        .path(address.path.clone())?
+        .cache_properties(zbus::proxy::CacheProperties::No)
+        .build()
+        .await
+}
 
-fn answered(identifying: &[Option<&CallError>]) -> Result<(), String> {
-    if identifying.iter().all(Option::is_some) {
-        return Err(identifying
-            .iter()
-            .flatten()
-            .map(ToString::to_string)
-            .next()
-            .unwrap_or_else(|| "item did not answer".to_owned()));
+const SNI_INTERFACE: &str = "org.kde.StatusNotifierItem";
+
+const IDENTIFYING: [&str; 5] = ["Id", "Title", "Status", "IconName", "IconPixmap"];
+
+const PROPERTIES: [&str; 13] = [
+    "Id",
+    "Title",
+    "Status",
+    "IconName",
+    "IconPixmap",
+    "Category",
+    "Menu",
+    "ToolTip",
+    "IconThemePath",
+    "AttentionIconName",
+    "AttentionIconPixmap",
+    "OverlayIconName",
+    "OverlayIconPixmap",
+];
+
+type Properties = HashMap<String, zbus::zvariant::OwnedValue>;
+
+fn sni_interface() -> zbus::names::InterfaceName<'static> {
+    zbus::names::InterfaceName::from_static_str_unchecked(SNI_INTERFACE)
+}
+
+async fn get_all_properties(
+    proxy: &zbus::fdo::PropertiesProxy<'_>,
+    failures: &mut Vec<CallError>,
+) -> Properties {
+    match with_timeout(PROPERTY_TIMEOUT, "GetAll", proxy.get_all(sni_interface())).await {
+        Ok(bulk) => bulk,
+        Err(err) => {
+            tracing::debug!(error = %err, "GetAll unavailable, falling back to single gets");
+            failures.push(err);
+            Properties::new()
+        }
     }
-    Ok(())
+}
+
+async fn fill_missing_properties(
+    proxy: &zbus::fdo::PropertiesProxy<'_>,
+    bulk: &mut Properties,
+    declared: &std::collections::HashSet<String>,
+    failures: &mut Vec<CallError>,
+) {
+    for name in PROPERTIES {
+        if bulk.contains_key(name) || (!declared.is_empty() && !declared.contains(name)) {
+            continue;
+        }
+        match with_timeout(PROPERTY_TIMEOUT, name, proxy.get(sni_interface(), name)).await {
+            Ok(value) => {
+                bulk.insert(name.to_owned(), value);
+            }
+            Err(err) => failures.push(err),
+        }
+    }
+}
+
+fn take<T: TryFrom<zbus::zvariant::OwnedValue>>(bulk: &mut Properties, name: &str) -> Option<T> {
+    T::try_from(bulk.remove(name)?).ok()
 }
 
 async fn resolve(connection: &zbus::Connection, address: &ItemAddress) -> ResolveResult {
-    let proxy = item_proxy(connection, address)
+    let proxy = properties_proxy(connection, address)
         .await
         .map_err(|err| format!("cannot build proxy: {err}"))?;
 
-    let (
-        id,
-        title,
-        status,
-        icon_name,
-        icon_pixmap,
-        category,
-        menu,
-        tooltip,
-        theme_path,
-        attention_icon_name,
-        attention_icon_pixmap,
-        overlay_icon_name,
-        overlay_icon_pixmap,
-        introspection,
-    ) = futures::join!(
-        with_timeout(PROPERTY_TIMEOUT, "Id", proxy.id()),
-        with_timeout(PROPERTY_TIMEOUT, "Title", proxy.title()),
-        with_timeout(PROPERTY_TIMEOUT, "Status", proxy.status()),
-        with_timeout(PROPERTY_TIMEOUT, "IconName", proxy.icon_name()),
-        with_timeout(PROPERTY_TIMEOUT, "IconPixmap", proxy.icon_pixmap()),
-        with_timeout(PROPERTY_TIMEOUT, "Category", proxy.category()),
-        with_timeout(PROPERTY_TIMEOUT, "Menu", proxy.menu()),
-        with_timeout(PROPERTY_TIMEOUT, "ToolTip", proxy.tool_tip()),
-        with_timeout(PROPERTY_TIMEOUT, "IconThemePath", proxy.icon_theme_path()),
-        with_timeout(
-            PROPERTY_TIMEOUT,
-            "AttentionIconName",
-            proxy.attention_icon_name()
-        ),
-        with_timeout(
-            PROPERTY_TIMEOUT,
-            "AttentionIconPixmap",
-            proxy.attention_icon_pixmap()
-        ),
-        with_timeout(
-            PROPERTY_TIMEOUT,
-            "OverlayIconName",
-            proxy.overlay_icon_name()
-        ),
-        with_timeout(
-            PROPERTY_TIMEOUT,
-            "OverlayIconPixmap",
-            proxy.overlay_icon_pixmap()
-        ),
-        introspect(connection, address),
-    );
+    let mut failures = Vec::new();
+    let mut bulk = get_all_properties(&proxy, &mut failures).await;
+    let introspection = introspect(connection, address).await;
+    let declared = declared_properties(introspection.as_deref());
+    fill_missing_properties(&proxy, &mut bulk, &declared, &mut failures).await;
 
-    let failures: [Option<&CallError>; 13] = [
-        id.as_ref().err(),
-        title.as_ref().err(),
-        status.as_ref().err(),
-        icon_name.as_ref().err(),
-        icon_pixmap.as_ref().err(),
-        category.as_ref().err(),
-        menu.as_ref().err(),
-        tooltip.as_ref().err(),
-        theme_path.as_ref().err(),
-        attention_icon_name.as_ref().err(),
-        attention_icon_pixmap.as_ref().err(),
-        overlay_icon_name.as_ref().err(),
-        overlay_icon_pixmap.as_ref().err(),
-    ];
-    answered(&failures[..IDENTIFYING])?;
-    let partial = failures.into_iter().flatten().any(CallError::is_transient);
+    if IDENTIFYING.iter().all(|name| !bulk.contains_key(*name)) {
+        return Err(failures
+            .first()
+            .map_or_else(|| "item did not answer".to_owned(), ToString::to_string));
+    }
 
-    let menu_path = menu.ok().filter(|path| path.as_str() != "/");
-    let theme_path = theme_path.ok().filter(|path| !path.is_empty());
+    let missing = declared
+        .iter()
+        .any(|name| PROPERTIES.contains(&name.as_str()) && !bulk.contains_key(name));
+    let partial = missing || failures.iter().any(CallError::is_transient);
+
+    let menu_path: Option<OwnedObjectPath> =
+        take(&mut bulk, "Menu").filter(|path: &OwnedObjectPath| path.as_str() != "/");
+    let theme_path: Option<String> =
+        take(&mut bulk, "IconThemePath").filter(|path: &String| !path.is_empty());
+    let status: Option<String> = take(&mut bulk, "Status");
+    let category: Option<String> = take(&mut bulk, "Category");
 
     Ok(Resolved {
         partial,
         props: ResolvedProps {
-            id: id.unwrap_or_default(),
-            title: title.unwrap_or_default(),
+            id: take(&mut bulk, "Id").unwrap_or_default(),
+            title: take(&mut bulk, "Title").unwrap_or_default(),
             category: category.as_deref().map(Category::from).unwrap_or_default(),
             status: status.as_deref().map(ItemStatus::from).unwrap_or_default(),
             menu_path,
-            tooltip: tooltip.ok(),
+            tooltip: take(&mut bulk, "ToolTip"),
             takes_activation_token: announces_activation_token(introspection.as_deref()),
             icon: Arc::new(IconSource {
-                icon_name: icon_name.unwrap_or_default(),
-                icon_pixmap: icon_pixmap.unwrap_or_default(),
-                attention_icon_name: attention_icon_name.unwrap_or_default(),
-                attention_icon_pixmap: attention_icon_pixmap.unwrap_or_default(),
-                overlay_icon_name: overlay_icon_name.unwrap_or_default(),
-                overlay_icon_pixmap: overlay_icon_pixmap.unwrap_or_default(),
+                icon_name: take(&mut bulk, "IconName").unwrap_or_default(),
+                icon_pixmap: take(&mut bulk, "IconPixmap").unwrap_or_default(),
+                attention_icon_name: take(&mut bulk, "AttentionIconName").unwrap_or_default(),
+                attention_icon_pixmap: take(&mut bulk, "AttentionIconPixmap").unwrap_or_default(),
+                overlay_icon_name: take(&mut bulk, "OverlayIconName").unwrap_or_default(),
+                overlay_icon_pixmap: take(&mut bulk, "OverlayIconPixmap").unwrap_or_default(),
                 theme_path,
             }),
         },
@@ -1202,6 +1234,28 @@ async fn introspect(connection: &zbus::Connection, address: &ItemAddress) -> Opt
 
 fn announces_activation_token(introspection: Option<&str>) -> bool {
     introspection.is_some_and(|xml| xml.contains("ProvideXdgActivationToken"))
+}
+
+fn declared_properties(introspection: Option<&str>) -> std::collections::HashSet<String> {
+    let Some(xml) = introspection else {
+        return std::collections::HashSet::new();
+    };
+    let Some(interface) = xml.split(SNI_INTERFACE).nth(1) else {
+        return std::collections::HashSet::new();
+    };
+    let interface = interface.split("<interface").next().unwrap_or(interface);
+
+    interface
+        .match_indices("<property")
+        .filter_map(|(at, _)| {
+            let rest = &interface[at..];
+            let end = rest.find('>')?;
+            let name = rest[..end].split("name=").nth(1)?.trim_start();
+            let quote = name.chars().next().filter(|ch| *ch == '"' || *ch == '\'')?;
+            let name = &name[1..];
+            Some(name[..name.find(quote)?].to_owned())
+        })
+        .collect()
 }
 
 async fn offer_token(proxy: &StatusNotifierItemProxy<'_>, token: &str) {
@@ -1327,6 +1381,50 @@ mod token_capability_tests {
         assert!(!announces_activation_token(Some("<node>\n</node>")));
         assert!(!announces_activation_token(Some("")));
         assert!(!announces_activation_token(None));
+    }
+}
+
+#[cfg(test)]
+mod declared_property_tests {
+    use super::declared_properties;
+
+    const AYATANA_ITEM: &str = r#"<node>
+  <interface name="org.freedesktop.DBus.Properties">
+    <property name="Decoy" type="s" access="read"/>
+  </interface>
+  <interface name="org.kde.StatusNotifierItem">
+    <method name="Scroll"><arg name="delta" type="i" direction="in"/></method>
+    <property name="IconName" type="s" access="read"/>
+    <property name='IconThemePath' type="s" access="read"/>
+    <property name="Menu" type="o" access="read"/>
+  </interface>
+  <interface name="org.freedesktop.DBus.Peer">
+    <property name="Other" type="s" access="read"/>
+  </interface>
+</node>"#;
+
+    #[test]
+    fn only_the_tray_interfaces_properties_are_collected() {
+        let declared = declared_properties(Some(AYATANA_ITEM));
+        assert_eq!(declared.len(), 3, "got {declared:?}");
+        for name in ["IconName", "IconThemePath", "Menu"] {
+            assert!(
+                declared.contains(name),
+                "{name} is missing from {declared:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_item_that_lists_no_properties_says_nothing_about_what_it_has() {
+        assert!(declared_properties(None).is_empty());
+        assert!(declared_properties(Some("<node>\n</node>")).is_empty());
+        assert!(
+            declared_properties(Some(
+                r#"<node><interface name="org.kde.StatusNotifierItem"></interface></node>"#
+            ))
+            .is_empty()
+        );
     }
 }
 

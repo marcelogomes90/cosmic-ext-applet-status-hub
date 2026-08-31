@@ -2,8 +2,6 @@ use cosmic::cosmic_config::{Config, ConfigGet, ConfigSet, CosmicConfigEntry, Err
 
 use crate::core::model::{ItemKey, TrayItem};
 
-pub const MAX_PINNED: usize = 16;
-
 pub const CONFIG_VERSION: u64 = 1;
 pub const PINNED_KEY: &str = "pinned";
 
@@ -16,9 +14,6 @@ impl Pins {
     pub fn from_keys(keys: impl IntoIterator<Item = ItemKey>) -> Self {
         let mut pinned: Vec<ItemKey> = Vec::new();
         for key in keys {
-            if pinned.len() >= MAX_PINNED {
-                break;
-            }
             if !pinned.contains(&key) {
                 pinned.push(key);
             }
@@ -30,17 +25,12 @@ impl Pins {
         self.pinned.contains(key)
     }
 
-    pub fn toggle(&mut self, key: &ItemKey) -> bool {
+    pub fn toggle(&mut self, key: &ItemKey) {
         if let Some(position) = self.pinned.iter().position(|pinned| pinned == key) {
             self.pinned.remove(position);
-            return true;
-        }
-        if self.pinned.len() >= MAX_PINNED {
-            tracing::info!(item = %key, "not pinning, the panel is full");
-            return false;
+            return;
         }
         self.pinned.push(key.clone());
-        true
     }
 
     pub fn keys(&self) -> &[ItemKey] {
@@ -168,22 +158,21 @@ mod tests {
     fn pinning_the_same_item_twice_unpins_it() {
         let mut pins = Pins::default();
 
-        assert!(pins.toggle(&key("steam")));
+        pins.toggle(&key("steam"));
         assert!(pins.contains(&key("steam")));
 
-        assert!(pins.toggle(&key("steam")));
+        pins.toggle(&key("steam"));
         assert!(!pins.contains(&key("steam")));
     }
 
     #[test]
-    fn the_panel_never_takes_more_than_its_share() {
-        let mut pins = Pins::from_keys((0..MAX_PINNED).map(|n| key(&format!("item{n}"))));
+    fn every_item_in_the_tray_can_be_pinned() {
+        let mut pins = Pins::from_keys((0..64).map(|n| key(&format!("item{n}"))));
 
-        assert!(!pins.toggle(&key("one-too-many")));
-        assert_eq!(pins.keys().len(), MAX_PINNED);
+        pins.toggle(&key("one-more"));
 
-        assert!(pins.toggle(&key("item0")));
-        assert!(pins.toggle(&key("one-too-many")));
+        assert_eq!(pins.keys().len(), 65);
+        assert!(pins.contains(&key("one-more")));
     }
 
     #[test]
