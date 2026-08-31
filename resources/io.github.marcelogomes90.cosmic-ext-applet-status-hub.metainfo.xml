@@ -69,6 +69,19 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.4.0" date="2026-08-31">
+      <description>
+        <p>Tray icons keep their detail on both light and dark panels, and the settings list finally names applications correctly.</p>
+        <ul>
+          <li>Repaints every icon so its shading always moves away from the panel behind it, within a fixed budget. Dark detail no longer sinks into a dark panel and light detail no longer washes out on a light one, while a coloured badge keeps the colours the application drew it with.</li>
+          <li>Reorders the tray by dragging items in the settings list, and remembers that order across restarts.</li>
+          <li>Pins as many items as you like. The panel still shows only what fits its monitor and keeps the rest in the popup, so the previous limit of sixteen only refused pins you could reach anyway.</li>
+          <li>Names an application by its title rather than its tooltip, which many use for status text: the list showed "you have 1 notification" for Slack and the transfer speeds for qBittorrent.</li>
+          <li>Tells apart trays that publish the same generic Chromium identifier, so 1Password and Chrome no longer compete for the same pin.</li>
+          <li>Stops asking again for a property an application has already refused, instead of retrying it for a minute.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.3.0" date="2026-08-30">
       <description>
         <p>Clicking a tray item now brings the application's window forward, even when the application has no way to do that itself.</p>
