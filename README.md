@@ -42,11 +42,19 @@ so they stay one click away.
 
 ### Flatpak
 
+Status Hub is currently being submitted to the official COSMIC Flatpak repository. Direct installation from the COSMIC repository will be available once the submission is accepted.
+
+In the meantime, you can build and install the Flatpak locally:
+
 ```sh
-flatpak remote-add --if-not-exists --user cosmic https://apt.pop-os.org/cosmic/cosmic.flatpakrepo
-flatpak install --user cosmic io.github.marcelogomes90.cosmic-ext-applet-status-hub
+git clone https://github.com/marcelogomes90/cosmic-ext-applet-status-hub.git
+cd cosmic-ext-applet-status-hub
+
+flatpak-builder --user --install --force-clean build-dir \
+  flatpak/io.github.marcelogomes90.cosmic-ext-applet-status-hub/io.github.marcelogomes90.cosmic-ext-applet-status-hub.json
 ```
 
+This requires `flatpak-builder` and the required Flatpak runtimes.
 ### From source
 
 Needs a Rust toolchain and the COSMIC development dependencies.
