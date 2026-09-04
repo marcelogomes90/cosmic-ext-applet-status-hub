@@ -525,16 +525,16 @@ impl StatusHub {
             popup::HEADER_PADDING,
         );
 
-        let colour_icons = self
-            .draft_appearance
-            .unwrap_or(self.appearance)
-            .colour_icons();
         let appearance_row: Element<'_, Message> = cosmic::widget::container(
             cosmic::widget::row::with_children(vec![
                 text::body(fl!("colour-icons")).width(Length::Fill).into(),
-                cosmic::widget::toggler(colour_icons)
-                    .on_toggle(Message::ToggleColourIcons)
-                    .into(),
+                cosmic::widget::toggler(
+                    self.draft_appearance
+                        .unwrap_or(self.appearance)
+                        .colour_icons(),
+                )
+                .on_toggle(Message::ToggleColourIcons)
+                .into(),
             ])
             .align_y(cosmic::iced::Alignment::Center)
             .spacing(cosmic::theme::spacing().space_xs),
@@ -1368,6 +1368,9 @@ impl cosmic::Application for StatusHub {
                 let Some(appearance) = self.draft_appearance.as_mut() else {
                     return Task::none();
                 };
+                if appearance.colour_icons() == colour_icons {
+                    return Task::none();
+                }
                 appearance.set_colour_icons(colour_icons);
                 cosmic::task::message(Message::Relayout)
             }

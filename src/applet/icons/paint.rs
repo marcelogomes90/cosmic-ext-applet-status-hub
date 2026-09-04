@@ -115,9 +115,9 @@ fn tone_profile(
 
     let span = high - low;
     let tint = srgb_to_oklab(ink);
-    let dark_theme = tint.is_light();
-    let anchor = if dark_theme { high } else { low };
-    let room = if dark_theme {
+    let ink_is_light = tint.is_light();
+    let anchor = if ink_is_light { high } else { low };
+    let room = if ink_is_light {
         tint.lightness
     } else {
         1.0 - tint.lightness
@@ -163,10 +163,6 @@ impl Oklab {
 
 pub fn lightness_of(rgb: [u8; 3]) -> f32 {
     srgb_to_oklab(rgb).lightness
-}
-
-pub fn ink_is_light(ink: [u8; 3]) -> bool {
-    srgb_to_oklab(ink).is_light()
 }
 
 fn luminance(pixel: [u8; 4]) -> f32 {
@@ -271,26 +267,6 @@ fn classify_badge(pixels: &[[u8; 4]], width: usize, height: usize) -> Option<Bad
             for x in 0..width {
                 mask[y * width + x] = rows[y].is_some_and(|(min, max)| (min..=max).contains(&x))
                     && columns[x].is_some_and(|(min, max)| (min..=max).contains(&y));
-            }
-        }
-        let core = mask.clone();
-        for (index, included) in core.into_iter().enumerate() {
-            if !included {
-                continue;
-            }
-            let x = index % width;
-            let y = index / width;
-            let min_x = x.saturating_sub(1);
-            let max_x = x.saturating_add(1).min(width - 1);
-            let min_y = y.saturating_sub(1);
-            let max_y = y.saturating_add(1).min(height - 1);
-            for neighbour_y in min_y..=max_y {
-                for neighbour_x in min_x..=max_x {
-                    let neighbour = neighbour_y * width + neighbour_x;
-                    if pixels[neighbour][3] > 0 {
-                        mask[neighbour] = true;
-                    }
-                }
             }
         }
         Some(Badge { mask, width })
@@ -569,10 +545,7 @@ mod tests {
             &pixels[4 * 10 + 8][..3],
             &badge_colour([255, 255, 255, 255], theme.ink)
         );
-        assert_eq!(
-            &pixels[2 * 10 + 7][..3],
-            &badge_colour([255, 255, 255, 255], theme.ink)
-        );
+        assert_eq!(&pixels[2 * 10 + 7][..3], &theme.ink);
         let integrated_badge = pixels[3 * 10 + 8];
         assert!(integrated_badge[2].saturating_sub(integrated_badge[0]) > 80);
     }

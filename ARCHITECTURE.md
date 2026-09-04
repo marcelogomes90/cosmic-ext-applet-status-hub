@@ -265,8 +265,8 @@ rules, gradients and masks need no parser of our own. A file whose markup embeds
 inferred as symbolic; a file that draws nothing is treated as a single ink.
 
 A compact chromatic region touching an image edge is treated as a badge. Its mask is the intersection
-of the row and column spans of its coloured pixels, expanded through one pixel of visible
-antialiasing, rather than a rectangular bounding box. Badge pixels keep eighty percent of their
+of the row and column spans of its coloured pixels rather than a rectangular bounding box, so it
+does not consume nearby pixels from the icon body. Badge pixels keep eighty percent of their
 published Oklab colour and receive twenty percent of the panel ink, retaining the accent while its
 body and edge read as part of the themed icon.
 
