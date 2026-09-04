@@ -56,6 +56,7 @@ flatpak-builder --user --install --force-clean build-dir \
 ```
 
 This requires `flatpak-builder` and the required Flatpak runtimes.
+
 ### From source
 
 Needs a Rust toolchain and the COSMIC development dependencies.
