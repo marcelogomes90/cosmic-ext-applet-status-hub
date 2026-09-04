@@ -12,6 +12,8 @@ const MAX_HEIGHT: u16 = 1080;
 pub const HEADER_CONTROL: u16 = 32;
 pub const HEADER_ICON: u16 = 16;
 pub const SETTINGS_ROW: u16 = 36;
+pub const SETTINGS_APPEARANCE_ROW: u16 = 44;
+pub const SETTINGS_SECTION_HEADER: u16 = 28;
 pub const DRAG_HANDLE_ICON: &str = "grip-lines-symbolic";
 pub const DRAG_HANDLE_SIZE: u16 = 16;
 pub const DRAG_HANDLE_TARGET: u16 = 24;
@@ -119,12 +121,21 @@ pub fn header_height(control: u16, vertical_padding: u16) -> u16 {
     control.saturating_add(vertical_padding.saturating_mul(2))
 }
 
-pub fn settings_body_height(rows: usize, row: u16, spacing: u16, padding: u16) -> u16 {
+pub fn settings_body_height(rows: usize, row: u16, spacing: u16, fixed: u16, padding: u16) -> u16 {
     let rows = u16::try_from(rows).unwrap_or(u16::MAX);
     rows.saturating_mul(row)
         .saturating_add(rows.saturating_sub(1).saturating_mul(spacing))
+        .saturating_add(fixed)
         .saturating_add(padding.saturating_mul(2))
         .clamp(1, MAX_HEIGHT)
+}
+
+pub fn settings_chrome_height(spacing: u16) -> u16 {
+    SETTINGS_SECTION_HEADER
+        .saturating_mul(2)
+        .saturating_add(SETTINGS_APPEARANCE_ROW)
+        .saturating_add(1)
+        .saturating_add(spacing.saturating_mul(4))
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -618,10 +629,18 @@ mod tests {
     #[test]
     fn the_settings_list_is_as_tall_as_the_rows_it_holds() {
         assert_eq!(
-            settings_body_height(3, SETTINGS_ROW, 8, 12),
-            3 * SETTINGS_ROW + 2 * 8 + 24
+            settings_body_height(3, SETTINGS_ROW, 8, 20, 12),
+            3 * SETTINGS_ROW + 2 * 8 + 20 + 24
         );
-        assert_eq!(settings_body_height(0, SETTINGS_ROW, 8, 0), 1);
+        assert_eq!(settings_body_height(0, SETTINGS_ROW, 8, 0, 0), 1);
+    }
+
+    #[test]
+    fn appearance_and_tray_sections_reserve_their_fixed_height() {
+        assert_eq!(
+            settings_chrome_height(4),
+            SETTINGS_SECTION_HEADER * 2 + SETTINGS_APPEARANCE_ROW + 1 + 4 * 4
+        );
     }
 
     #[test]

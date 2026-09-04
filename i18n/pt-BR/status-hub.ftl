@@ -1,5 +1,8 @@
 app-title = Status Hub
 settings = Configurações
+appearance = Aparência
+colour-icons = Colorir ícones de acordo com o tema
+tray-icons = Ícones da bandeja
 save = Salvar
 no-watcher = Nenhum status notifier watcher em execução
 connecting = Conectando…

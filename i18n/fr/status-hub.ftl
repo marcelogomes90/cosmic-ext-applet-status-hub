@@ -1,5 +1,8 @@
 app-title = Centre d’état
 settings = Paramètres
+appearance = Apparence
+colour-icons = Colorer les icônes selon le thème
+tray-icons = Icônes de la zone de notification
 save = Enregistrer
 no-watcher = Aucun service de notification d’état n’est en cours d’exécution
 connecting = Connexion…

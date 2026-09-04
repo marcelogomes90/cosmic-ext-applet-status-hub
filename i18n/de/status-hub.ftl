@@ -1,5 +1,8 @@
 app-title = Statuszentrale
 settings = Einstellungen
+appearance = Erscheinungsbild
+colour-icons = Symbole an das Design anpassen
+tray-icons = Tray-Symbole
 save = Speichern
 no-watcher = Es wird kein Statusbenachrichtigungsdienst ausgeführt
 connecting = Verbindung wird hergestellt…

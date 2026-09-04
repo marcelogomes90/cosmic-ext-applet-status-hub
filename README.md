@@ -28,6 +28,7 @@ so they stay one click away.
   icons.
 - Resolves icons from icon names, absolute paths, or raw pixmap bytes, with attention and
   overlay icon support.
+- Lets you choose whether application icons keep their published colours or follow the panel theme.
 - Uses the standard tray mouse controls: left click activates the application, middle click
   requests its optional secondary action, and right click opens its menu. Activation requests
   carry an XDG activation token so the target application can raise its window.

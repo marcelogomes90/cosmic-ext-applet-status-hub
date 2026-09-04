@@ -1,5 +1,8 @@
 app-title = Statushub
 settings = Instellingen
+appearance = Uiterlijk
+colour-icons = Pictogrammen inkleuren volgens het thema
+tray-icons = Systeemvakpictogrammen
 save = Opslaan
 no-watcher = Er is geen statusmeldingsservice actief
 connecting = Verbinden…

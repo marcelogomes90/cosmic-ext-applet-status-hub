@@ -1,11 +1,12 @@
 use std::ffi::OsStr;
 use std::path::Path;
 
-use cosmic::widget::icon;
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
 
-use super::paint::{MAX_TINT_SHIFT, MIN_ALPHA, MIN_LIGHTNESS_SPAN, ink_is_light, lightness_of};
+use crate::core::icons::RgbaImage;
+
+use super::paint::{MIN_ALPHA, MIN_LIGHTNESS_SPAN, lightness_of};
 
 const MAX_SVG_BYTES: u64 = 256 * 1024;
 
@@ -13,38 +14,48 @@ const INSPECT_SIZE: u16 = 32;
 
 const MAX_CHROMA: u8 = 8;
 
-pub fn tinted_svg(path: &Path, ink: [u8; 3]) -> Option<icon::Handle> {
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub fn render_svg(path: &Path, size: u16) -> Option<RgbaImage> {
     if !std::fs::metadata(path).is_ok_and(|meta| meta.len() <= MAX_SVG_BYTES) {
         return None;
     }
-    let mut source = std::fs::read_to_string(path).ok()?;
-    let svg = source.find("<svg")?;
-    let opening = svg + source[svg..].find('>')? + 1;
-    let closing = source.rfind("</svg>")?;
-    if closing < opening {
-        return None;
+    let source = std::fs::read(path).ok()?;
+    let tree = usvg::Tree::from_data(&source, &usvg::Options::default()).ok()?;
+    let tree_size = tree.size();
+    let target = f32::from(size.max(1).saturating_mul(2));
+    let scale = target / tree_size.width().max(tree_size.height()).max(1.0);
+    let width = (tree_size.width() * scale).ceil().max(1.0) as u32;
+    let height = (tree_size.height() * scale).ceil().max(1.0) as u32;
+    let mut pixmap = Pixmap::new(width, height)?;
+    resvg::render(
+        &tree,
+        Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+
+    let mut bytes = pixmap.data().to_vec();
+    for pixel in bytes.as_chunks_mut::<4>().0 {
+        let alpha = u16::from(pixel[3]);
+        if alpha == 0 {
+            pixel[..3].fill(0);
+        } else {
+            for channel in &mut pixel[..3] {
+                *channel = u8::try_from(
+                    (u16::from(*channel) * 255 + alpha / 2)
+                        .checked_div(alpha)
+                        .unwrap_or_default()
+                        .min(255),
+                )
+                .unwrap_or(u8::MAX);
+            }
+        }
     }
 
-    let intercept = tint_intercepts(ink);
-    let red = 0.2126 * MAX_TINT_SHIFT;
-    let green = 0.7152 * MAX_TINT_SHIFT;
-    let blue = 0.0722 * MAX_TINT_SHIFT;
-    let filter = format!(
-        "<defs><filter id=\"status-hub-theme-tint\" x=\"-10%\" y=\"-10%\" width=\"120%\" height=\"120%\" color-interpolation-filters=\"sRGB\"><feColorMatrix type=\"matrix\" values=\"{red} {green} {blue} 0 {} {red} {green} {blue} 0 {} {red} {green} {blue} 0 {} 0 0 0 1 0\"/></filter></defs><g filter=\"url(#status-hub-theme-tint)\">",
-        intercept[0], intercept[1], intercept[2]
-    );
-    source.insert_str(closing, "</g>");
-    source.insert_str(opening, &filter);
-    Some(icon::from_svg_bytes(source.into_bytes()))
-}
-
-fn tint_intercepts(ink: [u8; 3]) -> [f32; 3] {
-    let anchor = if ink_is_light(ink) {
-        MAX_TINT_SHIFT
-    } else {
-        0.0
-    };
-    ink.map(|channel| f32::from(channel) / 255.0 - anchor)
+    Some(RgbaImage {
+        width,
+        height,
+        bytes,
+    })
 }
 
 pub fn single_ink_svg(path: &Path) -> bool {
@@ -187,23 +198,41 @@ mod tests {
     }
 
     #[test]
-    fn a_tinted_vector_shades_the_ink_without_reaching_the_panel() {
-        for (ink, base) in [
-            (dark_panel().ink, DARK_PANEL_BASE),
-            (light_panel().ink, LIGHT_PANEL_BASE),
-        ] {
-            let intercepts = tint_intercepts(ink);
-            for source in [0.0, 0.5, 1.0] {
-                for channel in 0..3 {
-                    let level = f32::from(ink[channel]) / 255.0;
-                    let towards_panel = (f32::from(base[channel]) / 255.0 - level).signum();
-                    let travel =
-                        (MAX_TINT_SHIFT * source + intercepts[channel] - level) * towards_panel;
-                    assert!(travel >= -f32::EPSILON);
-                    assert!(travel <= MAX_TINT_SHIFT + f32::EPSILON);
-                }
-            }
-        }
+    fn a_detailed_vector_is_rendered_at_twice_the_requested_size() {
+        let root = test_root("rendered-vector");
+        let path = svg_at(
+            &root,
+            "wide",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 8\"><rect width=\"16\" height=\"8\" fill=\"red\"/></svg>",
+        );
+
+        let image = render_svg(&path, 24).expect("the vector renders");
+
+        assert_eq!((image.width, image.height), (48, 24));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_vector_badge_keeps_its_accent_through_the_raster_painter() {
+        let root = test_root("vector-badge");
+        let path = svg_at(
+            &root,
+            "badge",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\">\
+             <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"3\" fill=\"white\"/>\
+             <circle cx=\"20\" cy=\"4\" r=\"4\" fill=\"#e01e5a\"/></svg>",
+        );
+        let rendered = render_svg(&path, 24).expect("the vector renders");
+
+        let painted = super::super::paint::prepare_raster(&rendered, 24, &dark_panel())
+            .expect("the vector is painted");
+        let pixels = painted.bytes.as_chunks::<4>().0;
+        let base = pixels[12 * 24 + 8];
+        let badge = pixels[4 * 24 + 20];
+
+        assert_eq!(&base[..3], &dark_panel().ink);
+        assert!(badge[0].saturating_sub(badge[2]) > 60);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
