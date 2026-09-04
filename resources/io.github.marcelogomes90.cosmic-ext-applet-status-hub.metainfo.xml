@@ -38,6 +38,10 @@
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/pinned-item-menu.png</image>
       <caption>A pinned item's menu, opened straight from the panel</caption>
     </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-light.png</image>
+      <caption>The same popup on a light theme, with every icon repainted to match it</caption>
+    </screenshot>
   </screenshots>
   <launchable type="desktop-id">io.github.marcelogomes90.cosmic-ext-applet-status-hub.desktop</launchable>
   <url type="homepage">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub</url>
@@ -69,6 +73,18 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.5.0" date="2026-09-04">
+      <description>
+        <p>Icons can now keep the colours their application published, and the ones Status Hub does repaint come out closer to the artwork they were made from.</p>
+        <ul>
+          <li>Adds an appearance setting that decides whether tray icons follow the panel theme or keep their published colours. Explicit symbolic icons and generic fallbacks still follow the panel, so nothing turns illegible when the setting is off.</li>
+          <li>Paints detailed vector icons through the same analysis as bitmaps, instead of the approximation a colour matrix in the file allowed, so an SVG and a PNG of the same artwork now come out alike.</li>
+          <li>Reads the usable tone range from the body of an icon alone, so a single highlight or a dark outline no longer flattens everything else.</li>
+          <li>Keeps a badge's outline out of that measurement and blends the badge itself with a fifth of the panel ink, so the accent survives while the badge still reads as part of the icon.</li>
+          <li>Groups the settings view into an appearance section and a tray section, and scrolls the list instead of growing a popup taller than the screen when many applications are in the tray.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.4.0" date="2026-08-31">
       <description>
         <p>Tray icons keep their detail on both light and dark panels, and the settings list finally names applications correctly.</p>
