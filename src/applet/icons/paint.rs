@@ -16,11 +16,15 @@ const MAX_BADGE_VISIBLE_PERCENT: usize = 50;
 
 const MIN_BADGE_FILL_PERCENT: usize = 15;
 
+const BADGE_ANALYSIS_MARGIN: usize = 1;
+
+const BADGE_ORIGINAL_WEIGHT: f32 = 0.8;
+
 pub const MIN_LIGHTNESS_SPAN: f32 = 0.03;
 
-pub const MAX_TINT_SHIFT: f32 = 0.28;
+pub const MAX_TINT_SHIFT: f32 = 0.34;
 
-const TINT_GAIN: f32 = 0.65;
+const TINT_GAIN: f32 = 0.85;
 
 fn recolour(image: &RgbaImage, theme: &ThemeContext) -> Option<RgbaImage> {
     let width = usize::try_from(image.width).ok()?;
@@ -37,9 +41,13 @@ fn recolour(image: &RgbaImage, theme: &ThemeContext) -> Option<RgbaImage> {
     for (index, pixel) in bytes.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let x = index % width;
         let y = index / width;
-        if pixel[3] > 0 && badge.as_ref().is_none_or(|badge| !badge.contains(x, y)) {
+        if pixel[3] > 0 {
             let alpha = pixel[3];
-            let colour = tones.tint(*pixel);
+            let colour = if badge.as_ref().is_some_and(|badge| badge.contains(x, y)) {
+                badge_colour(*pixel, theme.ink)
+            } else {
+                tones.tint(*pixel)
+            };
             *pixel = [colour[0], colour[1], colour[2], alpha];
             painted = true;
         }
@@ -55,6 +63,8 @@ fn recolour(image: &RgbaImage, theme: &ThemeContext) -> Option<RgbaImage> {
 struct ToneProfile {
     ink: [u8; 3],
     tint: Oklab,
+    low: f32,
+    high: f32,
     anchor: f32,
     gain: f32,
     detailed: bool,
@@ -65,7 +75,7 @@ impl ToneProfile {
         if !self.detailed {
             return self.ink;
         }
-        let difference = luminance(pixel) - self.anchor;
+        let difference = luminance(pixel).clamp(self.low, self.high) - self.anchor;
         oklab_to_srgb(Oklab {
             lightness: (self.tint.lightness + difference * self.gain).clamp(0.0, 1.0),
             ..self.tint
@@ -79,40 +89,23 @@ fn tone_profile(
     badge: Option<&Badge>,
     ink: [u8; 3],
 ) -> Option<ToneProfile> {
-    let peak = pixels
-        .iter()
-        .enumerate()
-        .filter(|&(index, _)| {
-            badge.is_none_or(|badge| !badge.contains(index % width, index / width))
-        })
-        .map(|(_, pixel)| pixel[3])
-        .max()?;
-    let mut low = 1.0f32;
-    let mut high = 0.0f32;
-    let mut found = false;
-
-    for (index, &pixel) in pixels.iter().enumerate() {
-        if pixel[3] < MIN_ALPHA
-            || u16::from(pixel[3]) * 10 < u16::from(peak) * 9
-            || badge.is_some_and(|badge| badge.contains(index % width, index / width))
-        {
-            continue;
-        }
-        let level = luminance(pixel);
-        low = low.min(level);
-        high = high.max(level);
-        found = true;
+    let mut levels = tone_levels(pixels, width, badge, true);
+    if levels.is_empty() && badge.is_some() {
+        levels = tone_levels(pixels, width, badge, false);
     }
-
-    if !found {
+    if levels.is_empty() {
         return None;
     }
+    levels.sort_unstable_by(f32::total_cmp);
+    let margin = levels.len() / 20;
+    let low = levels[margin];
+    let high = levels[levels.len() - 1 - margin];
 
     let span = high - low;
     let tint = srgb_to_oklab(ink);
-    let dark_theme = tint.is_light();
-    let anchor = if dark_theme { high } else { low };
-    let room = if dark_theme {
+    let ink_is_light = tint.is_light();
+    let anchor = if ink_is_light { high } else { low };
+    let room = if ink_is_light {
         tint.lightness
     } else {
         1.0 - tint.lightness
@@ -124,9 +117,58 @@ fn tone_profile(
     Some(ToneProfile {
         ink,
         tint,
+        low,
+        high,
         anchor,
         gain,
         detailed: span >= MIN_LIGHTNESS_SPAN,
+    })
+}
+
+fn tone_levels(
+    pixels: &[[u8; 4]],
+    width: usize,
+    badge: Option<&Badge>,
+    exclude_outline: bool,
+) -> Vec<f32> {
+    let excluded = |index: usize| {
+        badge.is_some_and(|badge| {
+            let x = index % width;
+            let y = index / width;
+            if exclude_outline {
+                badge.affects_tone(x, y)
+            } else {
+                badge.contains(x, y)
+            }
+        })
+    };
+    let peak = pixels
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !excluded(*index))
+        .map(|(_, pixel)| pixel[3])
+        .max()
+        .unwrap_or_default();
+    pixels
+        .iter()
+        .enumerate()
+        .filter(|(index, pixel)| {
+            pixel[3] >= MIN_ALPHA
+                && u16::from(pixel[3]) * 10 >= u16::from(peak) * 9
+                && !excluded(*index)
+        })
+        .map(|(_, &pixel)| luminance(pixel))
+        .collect()
+}
+
+fn badge_colour(pixel: [u8; 4], ink: [u8; 3]) -> [u8; 3] {
+    let original = srgb_to_oklab([pixel[0], pixel[1], pixel[2]]);
+    let themed = srgb_to_oklab(ink);
+    oklab_to_srgb(Oklab {
+        lightness: original.lightness * BADGE_ORIGINAL_WEIGHT
+            + themed.lightness * (1.0 - BADGE_ORIGINAL_WEIGHT),
+        a: original.a * BADGE_ORIGINAL_WEIGHT + themed.a * (1.0 - BADGE_ORIGINAL_WEIGHT),
+        b: original.b * BADGE_ORIGINAL_WEIGHT + themed.b * (1.0 - BADGE_ORIGINAL_WEIGHT),
     })
 }
 
@@ -145,10 +187,6 @@ impl Oklab {
 
 pub fn lightness_of(rgb: [u8; 3]) -> f32 {
     srgb_to_oklab(rgb).lightness
-}
-
-pub fn ink_is_light(ink: [u8; 3]) -> bool {
-    srgb_to_oklab(ink).is_light()
 }
 
 fn luminance(pixel: [u8; 4]) -> f32 {
@@ -201,14 +239,18 @@ fn linear_to_srgb(channel: f32) -> u8 {
 }
 
 struct Badge {
-    rows: Vec<Option<(usize, usize)>>,
-    columns: Vec<Option<(usize, usize)>>,
+    paint_mask: Vec<bool>,
+    tone_mask: Vec<bool>,
+    width: usize,
 }
 
 impl Badge {
     fn contains(&self, x: usize, y: usize) -> bool {
-        self.rows[y].is_some_and(|(min, max)| (min..=max).contains(&x))
-            && self.columns[x].is_some_and(|(min, max)| (min..=max).contains(&y))
+        self.paint_mask[y * self.width + x]
+    }
+
+    fn affects_tone(&self, x: usize, y: usize) -> bool {
+        self.tone_mask[y * self.width + x]
     }
 }
 
@@ -249,7 +291,36 @@ fn classify_badge(pixels: &[[u8; 4]], width: usize, height: usize) -> Option<Bad
 
     let bounds = bounds?;
     if plausible_badge(bounds, badge_coloured, visible, width, height) {
-        Some(Badge { rows, columns })
+        let mut paint_mask = vec![false; pixels.len()];
+        for y in 0..height {
+            for x in 0..width {
+                paint_mask[y * width + x] = rows[y]
+                    .is_some_and(|(min, max)| (min..=max).contains(&x))
+                    && columns[x].is_some_and(|(min, max)| (min..=max).contains(&y));
+            }
+        }
+        let mut tone_mask = paint_mask.clone();
+        for (index, included) in paint_mask.iter().copied().enumerate() {
+            if !included {
+                continue;
+            }
+            let x = index % width;
+            let y = index / width;
+            let min_x = x.saturating_sub(BADGE_ANALYSIS_MARGIN);
+            let max_x = x.saturating_add(BADGE_ANALYSIS_MARGIN).min(width - 1);
+            let min_y = y.saturating_sub(BADGE_ANALYSIS_MARGIN);
+            let max_y = y.saturating_add(BADGE_ANALYSIS_MARGIN).min(height - 1);
+            for neighbour_y in min_y..=max_y {
+                for neighbour_x in min_x..=max_x {
+                    tone_mask[neighbour_y * width + neighbour_x] = true;
+                }
+            }
+        }
+        Some(Badge {
+            paint_mask,
+            tone_mask,
+            width,
+        })
     } else {
         None
     }
@@ -476,7 +547,7 @@ mod tests {
             let ink = srgb_to_oklab(theme.ink);
             let towards_panel = (srgb_to_oklab(base).lightness - ink.lightness).signum();
 
-            assert!(luminance(light) - luminance(dark) >= 0.1);
+            assert!(luminance(light) - luminance(dark) >= 0.3);
             for shade in [light, dark] {
                 let shade = srgb_to_oklab([shade[0], shade[1], shade[2]]);
                 let travel = (shade.lightness - ink.lightness) * towards_panel;
@@ -505,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn a_coloured_badge_is_preserved_while_the_single_ink_base_is_recoloured() {
+    fn a_coloured_badge_keeps_its_accent_while_joining_the_theme_palette() {
         let badge = [0, 180, 255, 255];
         let image = pixmap(10, |x, y| match (x, y) {
             (8, 2 | 6) | (7..=9, 3 | 5) | (7 | 9, 4) => badge,
@@ -514,18 +585,63 @@ mod tests {
         });
         let before = alphas(&image);
 
-        let out = recolour(&image, &light_panel()).expect("the badge is a protected region");
+        let theme = light_panel();
+        let out = recolour(&image, &theme).expect("the badge is integrated");
         let pixels = out.bytes.as_chunks::<4>().0;
 
         assert_eq!(alphas(&out), before);
-        assert_eq!(&pixels[3 * 10 + 2][..3], &light_panel().ink);
-        assert_eq!(pixels[3 * 10 + 8], badge);
-        assert_eq!(pixels[4 * 10 + 8], [255, 255, 255, 255]);
-        assert_eq!(&pixels[2 * 10 + 7][..3], &light_panel().ink);
+        assert_eq!(&pixels[3 * 10 + 2][..3], &theme.ink);
+        assert_eq!(&pixels[3 * 10 + 8][..3], &badge_colour(badge, theme.ink));
+        assert_eq!(
+            &pixels[4 * 10 + 8][..3],
+            &badge_colour([255, 255, 255, 255], theme.ink)
+        );
+        assert_eq!(&pixels[2 * 10 + 7][..3], &theme.ink);
+        let integrated_badge = pixels[3 * 10 + 8];
+        assert!(integrated_badge[2].saturating_sub(integrated_badge[0]) > 80);
     }
 
     #[test]
-    fn a_badge_on_multi_tone_artwork_preserves_the_badge_and_adapts_the_base() {
+    fn a_badge_outline_does_not_change_the_body_tone() {
+        let body = |x, y| {
+            if (2..14).contains(&x) && (2..14).contains(&y) {
+                [245, 245, 245, 255]
+            } else {
+                [0, 0, 0, 0]
+            }
+        };
+        let cyan = [0, 216, 248, 255];
+        let badged = pixmap(16, |x, y| {
+            if (11..15).contains(&x) && (1..5).contains(&y) {
+                cyan
+            } else if (10..16).contains(&x) && (0..6).contains(&y) {
+                [20, 20, 20, 255]
+            } else {
+                body(x, y)
+            }
+        });
+        let plain = pixmap(16, body);
+
+        let theme = light_panel();
+        let with_badge = recolour(&badged, &theme).expect("the badged icon is painted");
+        let without_badge = recolour(&plain, &theme).expect("the plain icon is painted");
+        let with_badge = with_badge.bytes.as_chunks::<4>().0;
+        let without_badge = without_badge.bytes.as_chunks::<4>().0;
+
+        assert_eq!(
+            &with_badge[8 * 16 + 5][..3],
+            &without_badge[8 * 16 + 5][..3]
+        );
+        assert_eq!(&with_badge[8 * 16 + 5][..3], &theme.ink);
+        assert_eq!(&with_badge[3 * 16 + 10][..3], &theme.ink);
+        assert_eq!(
+            &with_badge[3 * 16 + 12][..3],
+            &badge_colour(cyan, theme.ink)
+        );
+    }
+
+    #[test]
+    fn a_badge_on_multi_tone_artwork_keeps_the_accent_and_adapts_the_base() {
         let badge = [220, 20, 40, 255];
         let image = pixmap(10, |x, y| match (x, y) {
             (7.., 2..8) => badge,
@@ -537,7 +653,10 @@ mod tests {
         let out = recolour(&image, &light_panel()).expect("the tonal base follows the theme");
         let pixels = out.bytes.as_chunks::<4>().0;
 
-        assert_eq!(pixels[3 * 10 + 8], badge);
+        assert_eq!(
+            &pixels[3 * 10 + 8][..3],
+            &badge_colour(badge, light_panel().ink)
+        );
         assert!(luminance(pixels[3 * 10 + 2]) > luminance(pixels[6 * 10 + 2]));
     }
 
@@ -555,8 +674,31 @@ mod tests {
         let out = recolour(&image, &light_panel()).expect("the edge badge is protected");
         let pixels = out.bytes.as_chunks::<4>().0;
 
-        assert_eq!(pixels[4 * 24 + 18], badge);
+        assert_eq!(
+            &pixels[4 * 24 + 18][..3],
+            &badge_colour(badge, light_panel().ink)
+        );
         assert!(luminance(pixels[11 * 24 + 10]) > luminance(pixels[10 * 24 + 10]));
+    }
+
+    #[test]
+    fn isolated_highlights_do_not_flatten_the_main_shading() {
+        let image = pixmap(20, |x, y| {
+            if !(2..18).contains(&x) || !(2..18).contains(&y) {
+                [0, 0, 0, 0]
+            } else if (x, y) == (2, 2) {
+                [255, 255, 255, 255]
+            } else if x < 10 {
+                [60, 60, 60, 255]
+            } else {
+                [180, 180, 180, 255]
+            }
+        });
+
+        let out = recolour(&image, &dark_panel()).expect("the artwork is painted");
+        let pixels = out.bytes.as_chunks::<4>().0;
+
+        assert!(luminance(pixels[10 * 20 + 12]) - luminance(pixels[10 * 20 + 6]) >= 0.3);
     }
 
     #[test]

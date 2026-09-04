@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod icons;
 pub mod identity;
 pub mod menu_view;
@@ -11,7 +12,7 @@ pub mod wayland;
 use cosmic::Element;
 use cosmic::app::{Core, Task};
 use cosmic::cctk::sctk::reexports::calloop;
-use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit};
+use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit, Wrapping};
 use cosmic::iced::clipboard::dnd::DndAction;
 use cosmic::iced::clipboard::mime::AsMimeTypes;
 use cosmic::iced::mouse::Interaction;
@@ -172,9 +173,12 @@ pub struct StatusHub {
     pins: pins::Pins,
     draft: Option<pins::Pins>,
     draft_order: Option<Vec<crate::core::model::ItemKey>>,
+    appearance: appearance::Appearance,
+    draft_appearance: Option<appearance::Appearance>,
     dragging: Option<crate::core::model::ItemKey>,
     wing: popup::Wing,
     pin_store: pins::PinStore,
+    appearance_store: appearance::AppearanceStore,
     menu: Option<Arc<MenuModel>>,
     menu_origin: MenuOrigin,
     panel_menu: Option<window::Id>,
@@ -349,6 +353,20 @@ impl StatusHub {
         .into()
     }
 
+    fn settings_section_heading<M: 'static>(title: String) -> Element<'static, M> {
+        cosmic::widget::container(text::heading(title))
+            .width(Length::Fill)
+            .height(Length::Fixed(f32::from(popup::SETTINGS_SECTION_HEADER)))
+            .align_y(cosmic::iced::Alignment::Center)
+            .into()
+    }
+
+    fn settings_section(title: String, controls: Element<'_, Message>) -> Element<'_, Message> {
+        cosmic::widget::column::with_children(vec![Self::settings_section_heading(title), controls])
+            .spacing(popup::SETTINGS_SECTION_CONTENT_SPACING)
+            .into()
+    }
+
     fn settings_drag_preview(
         handle: icon::Handle,
         size: u16,
@@ -393,8 +411,7 @@ impl StatusHub {
         let body = match self.body {
             PopupBody::Items => self.items_height(),
             PopupBody::Settings => popup::settings_body_height(
-                self.snapshot.items.len(),
-                popup::SETTINGS_ROW,
+                self.snapshot.items.len().max(1),
                 cosmic::theme::spacing().space_xxs,
                 popup::HEADER_PADDING,
             ),
@@ -438,11 +455,7 @@ impl StatusHub {
             .class(accent_icon_button())
             .width(Length::Fixed(control))
             .height(Length::Fixed(control));
-            if self.snapshot.items.is_empty() {
-                settings.into()
-            } else {
-                settings.on_press(Message::OpenSettings).into()
-            }
+            settings.on_press(Message::OpenSettings).into()
         };
 
         let title = if showing_settings {
@@ -483,9 +496,12 @@ impl StatusHub {
             return popup::notice(message, self.items_height());
         }
 
-        self.icons
-            .borrow_mut()
-            .refresh(&self.snapshot, self.item_icon_size(), false);
+        self.icons.borrow_mut().refresh(
+            &self.snapshot,
+            self.item_icon_size(),
+            false,
+            self.appearance.colour_icons(),
+        );
         let spacing = self.tray_spacing();
         popup::item_grid(
             popup_items.into_iter().map(|item| self.item_button(item)),
@@ -496,25 +512,53 @@ impl StatusHub {
     }
 
     fn settings_body(&self) -> Element<'_, Message> {
-        self.icons
-            .borrow_mut()
-            .refresh(&self.snapshot, self.item_icon_size(), false);
+        self.icons.borrow_mut().refresh(
+            &self.snapshot,
+            self.item_icon_size(),
+            false,
+            self.appearance.colour_icons(),
+        );
         let spacing = cosmic::theme::spacing().space_xxs;
         let rows = self.settings_rows();
-        let height = popup::settings_body_height(
-            rows.len(),
-            popup::SETTINGS_ROW,
-            spacing,
-            popup::HEADER_PADDING,
-        );
+        let row_count = rows.len().max(1);
+        let height = popup::settings_body_height(row_count, spacing, popup::HEADER_PADDING);
 
-        let list = cosmic::widget::column::with_children(
-            rows.into_iter()
-                .map(|item| self.settings_row(item))
-                .collect::<Vec<_>>(),
-        )
+        let appearance_row = cosmic::widget::row::with_children(vec![
+            text::body(fl!("colour-icons"))
+                .width(Length::Fill)
+                .wrapping(Wrapping::Word)
+                .into(),
+            cosmic::widget::toggler(
+                self.draft_appearance
+                    .unwrap_or(self.appearance)
+                    .colour_icons(),
+            )
+            .width(Length::Shrink)
+            .on_toggle(Message::ToggleColourIcons)
+            .into(),
+        ])
         .width(Length::Fill)
-        .spacing(spacing);
+        .align_y(cosmic::iced::Alignment::Center)
+        .spacing(cosmic::theme::spacing().space_xs);
+        let appearance_controls: Element<'_, Message> =
+            cosmic::widget::list_column().add(appearance_row).into();
+        let tray_rows: Element<'_, Message> = if rows.is_empty() {
+            cosmic::widget::list_column()
+                .add(text::body(fl!("empty-state")))
+                .into()
+        } else {
+            rows.into_iter()
+                .fold(cosmic::widget::list_column(), |list, item| {
+                    list.add(self.settings_row(item))
+                })
+                .into()
+        };
+        let list = cosmic::widget::column::with_children(vec![
+            Self::settings_section(fl!("appearance"), appearance_controls),
+            Self::settings_section(fl!("tray-icons"), tray_rows),
+        ])
+        .width(Length::Fill)
+        .spacing(popup::SETTINGS_SECTION_SPACING);
 
         popup::settings_list(list, height, popup::HEADER_PADDING)
     }
@@ -588,12 +632,6 @@ impl StatusHub {
         let row = cosmic::widget::container(row)
             .width(Length::Fill)
             .height(Length::Fixed(f32::from(popup::SETTINGS_ROW)))
-            .padding([
-                0,
-                popup::SETTINGS_ROW_RIGHT_PADDING,
-                0,
-                popup::SETTINGS_ROW_LEFT_PADDING,
-            ])
             .align_y(cosmic::iced::Alignment::Center);
 
         let row = if self.dragging.as_ref() == Some(&item.key) {
@@ -710,10 +748,12 @@ impl StatusHub {
     }
 
     fn refresh_icons(&mut self, retry_fallbacks: bool, restart: bool) -> Task<Message> {
-        let unresolved =
-            self.icons
-                .borrow_mut()
-                .refresh(&self.snapshot, self.item_icon_size(), retry_fallbacks);
+        let unresolved = self.icons.borrow_mut().refresh(
+            &self.snapshot,
+            self.item_icon_size(),
+            retry_fallbacks,
+            self.appearance.colour_icons(),
+        );
         if !unresolved {
             self.cancel_icon_retry();
             return Task::none();
@@ -755,7 +795,7 @@ impl StatusHub {
             Task::none()
         };
 
-        if emptied && self.popup_state != PopupState::Closed {
+        if emptied && self.popup_state != PopupState::Closed && self.body == PopupBody::Items {
             return Task::batch([icon_task, menu_task, self.close_popup(true)]);
         }
         Task::batch([icon_task, menu_task])
@@ -961,6 +1001,7 @@ impl StatusHub {
                 self.body = PopupBody::Items;
                 self.draft = None;
                 self.draft_order = None;
+                self.draft_appearance = None;
                 self.dragging = None;
                 self.forget_menu();
             }
@@ -973,6 +1014,7 @@ impl StatusHub {
         self.body = PopupBody::Settings;
         self.draft = Some(self.pins.clone());
         self.draft_order = Some(order::normalise(&[], &self.snapshot.items));
+        self.draft_appearance = Some(self.appearance);
         self.forget_menu();
         cosmic::task::message(Message::Relayout)
     }
@@ -981,6 +1023,7 @@ impl StatusHub {
         self.body = PopupBody::Items;
         let draft = self.draft.take();
         let draft_order = self.draft_order.take();
+        let draft_appearance = self.draft_appearance.take();
         self.dragging = None;
         self.forget_menu();
 
@@ -995,7 +1038,17 @@ impl StatusHub {
             self.tray.send(CoreCommand::SetRemembered(order));
         }
 
-        self.close_popup(true)
+        let appearance_task = if let Some(appearance) = draft_appearance
+            && appearance != self.appearance
+        {
+            self.appearance_store.save(appearance);
+            self.appearance = appearance;
+            self.refresh_icons(false, true)
+        } else {
+            Task::none()
+        };
+
+        Task::batch([appearance_task, self.close_popup(true)])
     }
 
     fn forget_menu(&mut self) {
@@ -1078,6 +1131,15 @@ impl StatusHub {
         close_menu.chain(cosmic::task::message(Message::Relayout))
     }
 
+    fn apply_appearance(&mut self, appearance: appearance::Appearance) -> Task<Message> {
+        if self.appearance == appearance {
+            return Task::none();
+        }
+
+        self.appearance = appearance;
+        self.refresh_icons(false, true)
+    }
+
     fn hub_positioner(&self, parent: window::Id, id: window::Id) -> SctkPositioner {
         let height = self.hub_layout().height();
         let mut settings = self.core.applet.get_popup_settings(
@@ -1127,6 +1189,8 @@ impl cosmic::Application for StatusHub {
         tracing::info!(?wing, "panel placement");
         let pin_store = pins::PinStore::open(APP_ID);
         let pins = pin_store.load();
+        let appearance_store = appearance::AppearanceStore::open(APP_ID);
+        let appearance = appearance_store.load();
         (
             Self {
                 core,
@@ -1138,9 +1202,12 @@ impl cosmic::Application for StatusHub {
                 pins,
                 draft: None,
                 draft_order: None,
+                appearance,
+                draft_appearance: None,
                 dragging: None,
                 wing,
                 pin_store,
+                appearance_store,
                 menu: None,
                 menu_origin: MenuOrigin::Hub,
                 panel_menu: None,
@@ -1175,6 +1242,7 @@ impl cosmic::Application for StatusHub {
             subscription::menus(&self.tray),
             subscription::pins(),
             subscription::order(),
+            subscription::appearance(),
             wayland::subscription().map(Message::Wayland),
         ])
     }
@@ -1246,6 +1314,8 @@ impl cosmic::Application for StatusHub {
 
             Message::SaveSettings => self.on_save_settings(),
 
+            Message::AppearanceChanged(appearance) => self.apply_appearance(appearance),
+
             Message::PinsChanged(pins) => self.apply_pins(pins),
 
             Message::DismissMenu => {
@@ -1278,6 +1348,17 @@ impl cosmic::Application for StatusHub {
                 cosmic::task::message(Message::Relayout)
             }
 
+            Message::ToggleColourIcons(colour_icons) => {
+                let Some(appearance) = self.draft_appearance.as_mut() else {
+                    return Task::none();
+                };
+                if appearance.colour_icons() == colour_icons {
+                    return Task::none();
+                }
+                appearance.set_colour_icons(colour_icons);
+                cosmic::task::message(Message::Relayout)
+            }
+
             Message::Wayland(update) => self.on_wayland(update),
         }
     }
@@ -1303,9 +1384,12 @@ impl cosmic::Application for StatusHub {
             );
         }
 
-        self.icons
-            .borrow_mut()
-            .refresh(&self.snapshot, self.item_icon_size(), false);
+        self.icons.borrow_mut().refresh(
+            &self.snapshot,
+            self.item_icon_size(),
+            false,
+            self.appearance.colour_icons(),
+        );
 
         let hub: Element<'_, Message> = hub.into();
         let buttons = pinned.into_iter().map(|item| self.item_button(item));

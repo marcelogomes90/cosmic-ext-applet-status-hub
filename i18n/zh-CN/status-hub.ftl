@@ -1,5 +1,8 @@
 app-title = 状态中心
 settings = 设置
+appearance = 外观
+colour-icons = 根据主题为图标着色
+tray-icons = 托盘图标
 save = 保存
 no-watcher = 没有正在运行的状态通知服务
 connecting = 正在连接…

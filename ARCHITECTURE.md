@@ -178,8 +178,9 @@ Panel bounds are a maximum on the major axis, not a mandatory size. Each instanc
 pinned items that fit its monitor's bounds, always reserving one slot for the hub; the rest stay in
 that instance's popup. Any number of items can be pinned — the panel already decides how many it
 shows, so a cap on the stored list would only refuse pins the user could reach anyway by unpinning
-something else. Pins live in `cosmic_config` and every instance watches it, so pinning on one
-monitor reaches the others.
+something else. Pins and icon appearance live in `cosmic_config` and every instance watches them,
+so a change on one monitor reaches the others. Both are edited as drafts in the settings view and
+committed together through Save.
 
 `HubLayout` computes the body height in Rust, because `Length::Fixed` ignores a container's
 intrinsic size: it reserves the divider and at least one pixel of menu space before allocating the
@@ -212,7 +213,8 @@ Many applications publish no icon name at all, so step 4 is a common outcome rat
 resort. Only step 5 is flagged as a fallback, and that flag drives a retry ladder stretching to
 about a minute, for applications that register an item before publishing its icon. The cache is
 keyed by `(address, generation, kind, size)`, so a fresh resolve invalidates an item's icon with no
-explicit invalidation anywhere; a change of icon theme or panel colours clears it outright.
+explicit invalidation anywhere; a change of icon theme, panel colours, or the user's colouring
+preference clears it outright.
 
 ### Reaching another sandbox's artwork
 
@@ -228,16 +230,19 @@ outside a sandbox.
 
 ### Painting
 
-Every icon is painted to the panel's foreground ink. The tray is a row of glyphs beside the clock
-and the battery, not a row of application logos, and an icon left in its published colours is
-legible on one theme and invisible on the other.
+By default every icon is painted to the panel's foreground ink. The tray is a row of glyphs beside
+the clock and the battery, not a row of application logos, and an icon left in its published colours
+can be legible on one theme and invisible on the other. Users who prefer application artwork can
+disable this painting; ordinary raster and vector icons then keep their published colours, while
+explicit symbolic icons and generic fallbacks still follow the panel so they remain legible.
 
 A raster is analysed in Oklab (`applet/icons/paint.rs`). Art larger than the panel size is shrunk
 first — the tone analysis reads the same shape either way, and a 256×256 pixmap costs about 0.8 ms
 to paint instead of 6.4 ms, which matters because painting happens inside `view()`. The lightness
 span is measured over the opaque core, the pixels at nine tenths of the artwork's own peak alpha or
 above, because antialiasing is coverage rather than content and should not vote on how the artwork
-reads.
+reads. Its fifth and ninety-fifth percentiles define the usable range so isolated highlights or
+shadows cannot flatten the rest of the icon.
 
 Below `MIN_LIGHTNESS_SPAN` the artwork is a silhouette and every pixel becomes the ink exactly.
 Above it, each pixel keeps its relative lightness, **anchored at the end nearest the ink**: the
@@ -246,23 +251,26 @@ travels away from the panel by at most `MAX_TINT_SHIFT`. The direction is the wh
 centred on the ink runs both ways, so on a dark panel the dark half of the artwork sinks toward the
 background and on a light panel the light half washes out — which is exactly the detail the artwork
 was drawn to show. Anchoring means no tone can move toward the panel past a fixed budget, and
-`TINT_GAIN` keeps about two thirds of the original separation within that budget rather than
+`TINT_GAIN` keeps most of the original separation within that budget rather than
 stretching every icon to fill it. Hue and chroma come from the ink, so a coloured foreground stays
 that colour instead of drifting as it lightens. Recolouring never changes alpha, cutouts and
 antialiasing included; the resize that follows smooths alpha alone.
 
 A vector is symbolic outright when its name ends in `-symbolic`. Otherwise it is rendered to 32×32
-and measured the same way (`applet/icons/svg.rs`): one achromatic ink means symbolic, anything else
-gets an `feColorMatrix` applying that same anchored ramp in sRGB. Rendering rather than reading the
-markup is deliberate — resvg is the renderer iced already draws these files with, so the measurement
-is of what will actually appear, and CSS, dead style rules, gradients and masks need no parser of
-our own. A file whose markup embeds a raster is refused up front, because the measurement would not
-see it; a file that draws nothing is treated as a single ink.
+and measured the same way (`applet/icons/svg.rs`): one achromatic ink means symbolic, while detailed
+artwork is rendered at twice its requested size and sent through the same Oklab painter as raster
+artwork. Rendering rather than reading the markup is deliberate — resvg is the renderer iced already
+draws these files with, so the measurement is of what will actually appear, and CSS, dead style
+rules, gradients and masks need no parser of our own. A file whose markup embeds a raster is not
+inferred as symbolic; a file that draws nothing is treated as a single ink.
 
-A compact chromatic region touching an image edge is treated as a badge and keeps its published
-colours, text and antialiasing included. Its mask is the intersection of the row and column spans of
-its coloured pixels rather than their bounding box, so a diamond or a circle protects its own
-interior without freezing the corners around it.
+A compact chromatic region touching an image edge is treated as a badge. Its mask is the intersection
+of the row and column spans of its coloured pixels rather than a rectangular bounding box, so it
+does not consume nearby pixels from the icon body. A separate analysis mask extends one pixel around
+the badge so its neutral outline and antialiasing cannot distort the tone profile of the icon body;
+that margin is not painted as part of the badge. Badge pixels keep eighty percent of their published
+Oklab colour and receive twenty percent of the panel ink, retaining the accent while its body and
+edge read as part of the themed icon.
 
 ## Raising the window a tray item stands for
 

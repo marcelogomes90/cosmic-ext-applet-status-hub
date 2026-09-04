@@ -13,7 +13,7 @@ mod svg;
 mod testing;
 
 use self::paint::prepare_raster;
-use self::svg::{single_ink_svg, tinted_svg};
+use self::svg::{render_svg, single_ink_svg};
 
 const FALLBACKS: [&str; 2] = ["application-default", "application-x-executable"];
 
@@ -40,8 +40,14 @@ pub struct IconCache {
 }
 
 impl IconCache {
-    pub fn refresh(&mut self, snapshot: &TraySnapshot, size: u16, retry_fallbacks: bool) -> bool {
-        self.refresh_with_theme(snapshot, size, retry_fallbacks, theme_context())
+    pub fn refresh(
+        &mut self,
+        snapshot: &TraySnapshot,
+        size: u16,
+        retry_fallbacks: bool,
+        colour_icons: bool,
+    ) -> bool {
+        self.refresh_with_theme(snapshot, size, retry_fallbacks, theme_context(colour_icons))
     }
 
     fn refresh_with_theme(
@@ -163,7 +169,10 @@ fn build(options: &IconOptions, size: u16, theme: &ThemeContext) -> Built {
     }
 
     if let Some(published) = &options.pixels {
-        let recoloured = prepare_raster(published, size, theme);
+        let recoloured = theme
+            .colour_icons
+            .then(|| prepare_raster(published, size, theme))
+            .flatten();
         let note = if recoloured.is_some() {
             " recoloured"
         } else {
@@ -186,7 +195,11 @@ fn build(options: &IconOptions, size: u16, theme: &ThemeContext) -> Built {
     for fallback in FALLBACKS {
         if let Some(path) = lookup(fallback, size) {
             let source = format!("GENERIC {fallback} -> {}", path.display());
-            let (handle, paint) = handle_for(path, fallback, theme);
+            let (mut handle, mut paint) = handle_for(path, fallback, size, theme);
+            if !theme.colour_icons {
+                handle.symbolic = true;
+                paint = "symbolic-fallback";
+            }
             return Built {
                 handle,
                 source,
@@ -197,7 +210,10 @@ fn build(options: &IconOptions, size: u16, theme: &ThemeContext) -> Built {
     }
 
     Built {
-        handle: icon::from_name(FALLBACKS[0]).size(size).handle(),
+        handle: icon::from_name(FALLBACKS[0])
+            .size(size)
+            .symbolic(true)
+            .handle(),
         source: "GENERIC unresolved".to_owned(),
         fallback: true,
         paint: "original",
@@ -284,15 +300,17 @@ fn named(name: &str) -> Named {
 struct ThemeContext {
     ink: [u8; 3],
     icon_theme: String,
+    colour_icons: bool,
 }
 
-fn theme_context() -> ThemeContext {
+fn theme_context(colour_icons: bool) -> ThemeContext {
     let theme = cosmic::theme::active();
     let container = theme.cosmic().background(theme.transparent);
     let ink = container.on.into_format::<u8, u8>();
     ThemeContext {
         ink: [ink.red, ink.green, ink.blue],
         icon_theme: cosmic::icon_theme::default(),
+        colour_icons,
     }
 }
 
@@ -303,7 +321,8 @@ fn handle_from(
     size: u16,
     theme: &ThemeContext,
 ) -> (icon::Handle, &'static str) {
-    if let Some(image) = raster(&path)
+    if theme.colour_icons
+        && let Some(image) = raster(&path)
         && let Some(recoloured) = prepare_raster(&image, size, theme)
     {
         return (
@@ -315,7 +334,7 @@ fn handle_from(
             },
         );
     }
-    handle_for(path, name, theme)
+    handle_for(path, name, size, theme)
 }
 
 fn raster(path: &Path) -> Option<RgbaImage> {
@@ -333,20 +352,42 @@ fn raster(path: &Path) -> Option<RgbaImage> {
     })
 }
 
-fn handle_for(path: PathBuf, name: &str, theme: &ThemeContext) -> (icon::Handle, &'static str) {
+fn handle_for(
+    path: PathBuf,
+    name: &str,
+    size: u16,
+    theme: &ThemeContext,
+) -> (icon::Handle, &'static str) {
     let explicit = name.ends_with("-symbolic")
         || path
             .file_stem()
             .and_then(OsStr::to_str)
             .is_some_and(|stem| stem.ends_with("-symbolic"));
+    if !theme.colour_icons {
+        let mut handle = icon::from_path(path);
+        handle.symbolic = explicit;
+        return (
+            handle,
+            if explicit {
+                "symbolic-explicit"
+            } else {
+                "original"
+            },
+        );
+    }
+
     let vector = path.extension() == Some(OsStr::new("svg"));
     let inferred = !explicit && single_ink_svg(&path);
     if vector
         && !explicit
         && !inferred
-        && let Some(handle) = tinted_svg(&path, theme.ink)
+        && let Some(image) = render_svg(&path, size)
+        && let Some(recoloured) = prepare_raster(&image, size, theme)
     {
-        return (handle, "tinted-detailed");
+        return (
+            icon::from_raster_pixels(recoloured.width, recoloured.height, recoloured.bytes),
+            "tinted-detailed",
+        );
     }
     let mut handle = icon::from_path(path);
     handle.symbolic |= explicit || inferred || vector;
@@ -405,16 +446,16 @@ mod tests {
         };
         let mut cache = IconCache::default();
 
-        assert!(cache.refresh(&snapshot, 24, false));
+        assert!(cache.refresh(&snapshot, 24, false, true));
         let icon_path = icon_dir.join(format!("{name}.svg"));
         std::fs::write(icon_path, "<svg xmlns=\"http://www.w3.org/2000/svg\"/>").unwrap();
-        assert!(!cache.refresh(&snapshot, 24, true));
+        assert!(!cache.refresh(&snapshot, 24, true, true));
 
         std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
-    fn colour_or_icon_theme_changes_rebuild_cached_pixmaps() {
+    fn colour_theme_icon_theme_or_paint_mode_changes_rebuild_cached_pixmaps() {
         use std::hash::{Hash, Hasher};
 
         let mut tray_item = item("theme-cache", 1);
@@ -454,10 +495,14 @@ mod tests {
         assert_ne!(second, first, "an icon theme change rebuilds the handle");
 
         cache.refresh_with_theme(&snapshot, 24, false, test_theme([255; 3]));
+        let third = hash(&cache);
+        assert_ne!(third, second, "a colour theme change rebuilds the handle");
+
+        cache.refresh_with_theme(&snapshot, 24, false, original_icons());
         assert_ne!(
             hash(&cache),
-            second,
-            "a colour theme change rebuilds the handle"
+            third,
+            "the original colour mode rebuilds the handle"
         );
     }
 
@@ -549,7 +594,7 @@ mod tests {
             "<svg><path fill=\"red\"/><path fill=\"blue\"/></svg>",
         );
 
-        let (handle, policy) = handle_for(path, "explicit-symbolic", &light_panel());
+        let (handle, policy) = handle_for(path, "explicit-symbolic", 16, &light_panel());
 
         assert!(handle.symbolic);
         assert_eq!(policy, "symbolic-explicit");
@@ -567,11 +612,56 @@ mod tests {
              <rect x=\"8\" width=\"8\" height=\"16\" fill=\"blue\"/></svg>",
         );
 
-        let (handle, policy) = handle_for(path, "painted-vector", &light_panel());
+        let (handle, policy) = handle_for(path, "painted-vector", 16, &light_panel());
 
         assert!(!handle.symbolic);
         assert_eq!(policy, "tinted-detailed");
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_regular_svg_keeps_its_published_colours_in_original_mode() {
+        let root = test_root("original-vector");
+        let path = svg_at(
+            &root,
+            "regular",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"16\" height=\"16\" fill=\"red\"/></svg>",
+        );
+
+        let (handle, policy) = handle_for(path, "regular", 16, &original_icons());
+
+        assert!(!handle.symbolic);
+        assert_eq!(policy, "original");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_explicit_symbolic_svg_still_follows_the_panel_in_original_mode() {
+        let root = test_root("original-symbolic");
+        let path = svg_at(
+            &root,
+            "regular-symbolic",
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"16\" height=\"16\"/></svg>",
+        );
+
+        let (handle, policy) = handle_for(path, "regular-symbolic", 16, &original_icons());
+
+        assert!(handle.symbolic);
+        assert_eq!(policy, "symbolic-explicit");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_pixmap_keeps_its_published_colours_in_original_mode() {
+        let options = IconOptions {
+            pixels: Some(std::sync::Arc::new(pixmap(10, |_, _| [220, 30, 40, 255]))),
+            ..IconOptions::default()
+        };
+
+        let built = build(&options, 10, &original_icons());
+
+        assert_eq!(built.paint, "original");
+        assert!(!built.handle.symbolic);
     }
 
     #[test]

@@ -8,10 +8,15 @@ use cosmic::widget::{autosize, container, divider, flex_row, mouse_area, scrolla
 
 pub const SURFACE_WIDTH: u16 = 360;
 const MAX_HEIGHT: u16 = 1080;
+pub const SETTINGS_MAX_HEIGHT: u16 = 650;
 
 pub const HEADER_CONTROL: u16 = 32;
 pub const HEADER_ICON: u16 = 16;
 pub const SETTINGS_ROW: u16 = 36;
+pub const SETTINGS_APPEARANCE_ROW: u16 = 40;
+pub const SETTINGS_SECTION_HEADER: u16 = 28;
+pub const SETTINGS_SECTION_CONTENT_SPACING: u16 = 12;
+pub const SETTINGS_SECTION_SPACING: u16 = 16;
 pub const DRAG_HANDLE_ICON: &str = "grip-lines-symbolic";
 pub const DRAG_HANDLE_SIZE: u16 = 16;
 pub const DRAG_HANDLE_TARGET: u16 = 24;
@@ -119,12 +124,29 @@ pub fn header_height(control: u16, vertical_padding: u16) -> u16 {
     control.saturating_add(vertical_padding.saturating_mul(2))
 }
 
-pub fn settings_body_height(rows: usize, row: u16, spacing: u16, padding: u16) -> u16 {
+pub fn settings_body_height(rows: usize, spacing: u16, padding: u16) -> u16 {
     let rows = u16::try_from(rows).unwrap_or(u16::MAX);
-    rows.saturating_mul(row)
-        .saturating_add(rows.saturating_sub(1).saturating_mul(spacing))
+    rows.saturating_mul(SETTINGS_ROW.saturating_add(spacing.saturating_mul(2)))
+        .saturating_add(rows.saturating_sub(1))
+        .saturating_add(settings_chrome_height(spacing))
         .saturating_add(padding.saturating_mul(2))
-        .clamp(1, MAX_HEIGHT)
+        .clamp(1, settings_body_max_height())
+}
+
+pub fn settings_body_max_height() -> u16 {
+    SETTINGS_MAX_HEIGHT
+        .saturating_sub(header_height(HEADER_CONTROL, HEADER_PADDING))
+        .saturating_sub(separator_height())
+        .max(1)
+}
+
+pub fn settings_chrome_height(spacing: u16) -> u16 {
+    SETTINGS_SECTION_HEADER
+        .saturating_mul(2)
+        .saturating_add(SETTINGS_APPEARANCE_ROW)
+        .saturating_add(spacing.saturating_mul(2))
+        .saturating_add(SETTINGS_SECTION_CONTENT_SPACING.saturating_mul(2))
+        .saturating_add(SETTINGS_SECTION_SPACING)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -618,10 +640,35 @@ mod tests {
     #[test]
     fn the_settings_list_is_as_tall_as_the_rows_it_holds() {
         assert_eq!(
-            settings_body_height(3, SETTINGS_ROW, 8, 12),
-            3 * SETTINGS_ROW + 2 * 8 + 24
+            settings_body_height(3, 4, 12),
+            3 * (SETTINGS_ROW + 8) + 2 + settings_chrome_height(4) + 24
         );
-        assert_eq!(settings_body_height(0, SETTINGS_ROW, 8, 0), 1);
+    }
+
+    #[test]
+    fn many_settings_rows_scroll_inside_a_bounded_popup() {
+        assert_eq!(
+            settings_body_height(usize::MAX, 4, 12),
+            settings_body_max_height()
+        );
+        assert_eq!(
+            header_height(HEADER_CONTROL, HEADER_PADDING)
+                + separator_height()
+                + settings_body_max_height(),
+            SETTINGS_MAX_HEIGHT
+        );
+    }
+
+    #[test]
+    fn appearance_and_tray_sections_reserve_their_fixed_height() {
+        assert_eq!(
+            settings_chrome_height(4),
+            SETTINGS_SECTION_HEADER * 2
+                + SETTINGS_APPEARANCE_ROW
+                + 8
+                + SETTINGS_SECTION_CONTENT_SPACING * 2
+                + SETTINGS_SECTION_SPACING
+        );
     }
 
     #[test]

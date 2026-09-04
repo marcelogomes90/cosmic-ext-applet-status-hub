@@ -1,5 +1,8 @@
 app-title = Centro di stato
 settings = Impostazioni
+appearance = Aspetto
+colour-icons = Colora le icone in base al tema
+tray-icons = Icone dell’area di notifica
 save = Salva
 no-watcher = Nessun servizio di notifica dello stato è in esecuzione
 connecting = Connessione…

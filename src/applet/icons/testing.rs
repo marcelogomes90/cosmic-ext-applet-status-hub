@@ -40,6 +40,14 @@ pub fn test_theme(ink: [u8; 3]) -> ThemeContext {
     ThemeContext {
         ink,
         icon_theme: "test".to_owned(),
+        colour_icons: true,
+    }
+}
+
+pub fn original_icons() -> ThemeContext {
+    ThemeContext {
+        colour_icons: false,
+        ..light_panel()
     }
 }
 

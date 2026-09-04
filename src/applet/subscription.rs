@@ -80,3 +80,12 @@ pub fn order() -> Subscription<Message> {
     )
     .map(|update| Message::OrderChanged(update.config))
 }
+
+pub fn appearance() -> Subscription<Message> {
+    cosmic::cosmic_config::config_subscription::<_, crate::applet::appearance::Appearance>(
+        "cosmic-status-hub-appearance",
+        crate::APP_ID.into(),
+        crate::applet::pins::CONFIG_VERSION,
+    )
+    .map(|update| Message::AppearanceChanged(update.config))
+}
