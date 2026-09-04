@@ -16,6 +16,8 @@ const MAX_BADGE_VISIBLE_PERCENT: usize = 50;
 
 const MIN_BADGE_FILL_PERCENT: usize = 15;
 
+const BADGE_ANALYSIS_MARGIN: usize = 1;
+
 const BADGE_ORIGINAL_WEIGHT: f32 = 0.8;
 
 pub const MIN_LIGHTNESS_SPAN: f32 = 0.03;
@@ -87,24 +89,10 @@ fn tone_profile(
     badge: Option<&Badge>,
     ink: [u8; 3],
 ) -> Option<ToneProfile> {
-    let peak = pixels
-        .iter()
-        .enumerate()
-        .filter(|&(index, _)| {
-            badge.is_none_or(|badge| !badge.contains(index % width, index / width))
-        })
-        .map(|(_, pixel)| pixel[3])
-        .max()?;
-    let mut levels: Vec<f32> = pixels
-        .iter()
-        .enumerate()
-        .filter(|(index, pixel)| {
-            pixel[3] >= MIN_ALPHA
-                && u16::from(pixel[3]) * 10 >= u16::from(peak) * 9
-                && badge.is_none_or(|badge| !badge.contains(index % width, index / width))
-        })
-        .map(|(_, &pixel)| luminance(pixel))
-        .collect();
+    let mut levels = tone_levels(pixels, width, badge, true);
+    if levels.is_empty() && badge.is_some() {
+        levels = tone_levels(pixels, width, badge, false);
+    }
     if levels.is_empty() {
         return None;
     }
@@ -135,6 +123,42 @@ fn tone_profile(
         gain,
         detailed: span >= MIN_LIGHTNESS_SPAN,
     })
+}
+
+fn tone_levels(
+    pixels: &[[u8; 4]],
+    width: usize,
+    badge: Option<&Badge>,
+    exclude_outline: bool,
+) -> Vec<f32> {
+    let excluded = |index: usize| {
+        badge.is_some_and(|badge| {
+            let x = index % width;
+            let y = index / width;
+            if exclude_outline {
+                badge.affects_tone(x, y)
+            } else {
+                badge.contains(x, y)
+            }
+        })
+    };
+    let peak = pixels
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !excluded(*index))
+        .map(|(_, pixel)| pixel[3])
+        .max()
+        .unwrap_or_default();
+    pixels
+        .iter()
+        .enumerate()
+        .filter(|(index, pixel)| {
+            pixel[3] >= MIN_ALPHA
+                && u16::from(pixel[3]) * 10 >= u16::from(peak) * 9
+                && !excluded(*index)
+        })
+        .map(|(_, &pixel)| luminance(pixel))
+        .collect()
 }
 
 fn badge_colour(pixel: [u8; 4], ink: [u8; 3]) -> [u8; 3] {
@@ -215,13 +239,18 @@ fn linear_to_srgb(channel: f32) -> u8 {
 }
 
 struct Badge {
-    mask: Vec<bool>,
+    paint_mask: Vec<bool>,
+    tone_mask: Vec<bool>,
     width: usize,
 }
 
 impl Badge {
     fn contains(&self, x: usize, y: usize) -> bool {
-        self.mask[y * self.width + x]
+        self.paint_mask[y * self.width + x]
+    }
+
+    fn affects_tone(&self, x: usize, y: usize) -> bool {
+        self.tone_mask[y * self.width + x]
     }
 }
 
@@ -262,14 +291,36 @@ fn classify_badge(pixels: &[[u8; 4]], width: usize, height: usize) -> Option<Bad
 
     let bounds = bounds?;
     if plausible_badge(bounds, badge_coloured, visible, width, height) {
-        let mut mask = vec![false; pixels.len()];
+        let mut paint_mask = vec![false; pixels.len()];
         for y in 0..height {
             for x in 0..width {
-                mask[y * width + x] = rows[y].is_some_and(|(min, max)| (min..=max).contains(&x))
+                paint_mask[y * width + x] = rows[y]
+                    .is_some_and(|(min, max)| (min..=max).contains(&x))
                     && columns[x].is_some_and(|(min, max)| (min..=max).contains(&y));
             }
         }
-        Some(Badge { mask, width })
+        let mut tone_mask = paint_mask.clone();
+        for (index, included) in paint_mask.iter().copied().enumerate() {
+            if !included {
+                continue;
+            }
+            let x = index % width;
+            let y = index / width;
+            let min_x = x.saturating_sub(BADGE_ANALYSIS_MARGIN);
+            let max_x = x.saturating_add(BADGE_ANALYSIS_MARGIN).min(width - 1);
+            let min_y = y.saturating_sub(BADGE_ANALYSIS_MARGIN);
+            let max_y = y.saturating_add(BADGE_ANALYSIS_MARGIN).min(height - 1);
+            for neighbour_y in min_y..=max_y {
+                for neighbour_x in min_x..=max_x {
+                    tone_mask[neighbour_y * width + neighbour_x] = true;
+                }
+            }
+        }
+        Some(Badge {
+            paint_mask,
+            tone_mask,
+            width,
+        })
     } else {
         None
     }
@@ -548,6 +599,45 @@ mod tests {
         assert_eq!(&pixels[2 * 10 + 7][..3], &theme.ink);
         let integrated_badge = pixels[3 * 10 + 8];
         assert!(integrated_badge[2].saturating_sub(integrated_badge[0]) > 80);
+    }
+
+    #[test]
+    fn a_badge_outline_does_not_change_the_body_tone() {
+        let body = |x, y| {
+            if (2..14).contains(&x) && (2..14).contains(&y) {
+                [245, 245, 245, 255]
+            } else {
+                [0, 0, 0, 0]
+            }
+        };
+        let cyan = [0, 216, 248, 255];
+        let badged = pixmap(16, |x, y| {
+            if (11..15).contains(&x) && (1..5).contains(&y) {
+                cyan
+            } else if (10..16).contains(&x) && (0..6).contains(&y) {
+                [20, 20, 20, 255]
+            } else {
+                body(x, y)
+            }
+        });
+        let plain = pixmap(16, body);
+
+        let theme = light_panel();
+        let with_badge = recolour(&badged, &theme).expect("the badged icon is painted");
+        let without_badge = recolour(&plain, &theme).expect("the plain icon is painted");
+        let with_badge = with_badge.bytes.as_chunks::<4>().0;
+        let without_badge = without_badge.bytes.as_chunks::<4>().0;
+
+        assert_eq!(
+            &with_badge[8 * 16 + 5][..3],
+            &without_badge[8 * 16 + 5][..3]
+        );
+        assert_eq!(&with_badge[8 * 16 + 5][..3], &theme.ink);
+        assert_eq!(&with_badge[3 * 16 + 10][..3], &theme.ink);
+        assert_eq!(
+            &with_badge[3 * 16 + 12][..3],
+            &badge_colour(cyan, theme.ink)
+        );
     }
 
     #[test]

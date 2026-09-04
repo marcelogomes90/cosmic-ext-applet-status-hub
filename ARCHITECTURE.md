@@ -266,9 +266,11 @@ inferred as symbolic; a file that draws nothing is treated as a single ink.
 
 A compact chromatic region touching an image edge is treated as a badge. Its mask is the intersection
 of the row and column spans of its coloured pixels rather than a rectangular bounding box, so it
-does not consume nearby pixels from the icon body. Badge pixels keep eighty percent of their
-published Oklab colour and receive twenty percent of the panel ink, retaining the accent while its
-body and edge read as part of the themed icon.
+does not consume nearby pixels from the icon body. A separate analysis mask extends one pixel around
+the badge so its neutral outline and antialiasing cannot distort the tone profile of the icon body;
+that margin is not painted as part of the badge. Badge pixels keep eighty percent of their published
+Oklab colour and receive twenty percent of the panel ink, retaining the accent while its body and
+edge read as part of the themed icon.
 
 ## Raising the window a tray item stands for
 

@@ -12,7 +12,7 @@ pub mod wayland;
 use cosmic::Element;
 use cosmic::app::{Core, Task};
 use cosmic::cctk::sctk::reexports::calloop;
-use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit};
+use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit, Wrapping};
 use cosmic::iced::clipboard::dnd::DndAction;
 use cosmic::iced::clipboard::mime::AsMimeTypes;
 use cosmic::iced::mouse::Interaction;
@@ -361,6 +361,12 @@ impl StatusHub {
             .into()
     }
 
+    fn settings_section(title: String, controls: Element<'_, Message>) -> Element<'_, Message> {
+        cosmic::widget::column::with_children(vec![Self::settings_section_heading(title), controls])
+            .spacing(popup::SETTINGS_SECTION_CONTENT_SPACING)
+            .into()
+    }
+
     fn settings_drag_preview(
         handle: icon::Handle,
         size: u16,
@@ -406,9 +412,7 @@ impl StatusHub {
             PopupBody::Items => self.items_height(),
             PopupBody::Settings => popup::settings_body_height(
                 self.snapshot.items.len().max(1),
-                popup::SETTINGS_ROW,
                 cosmic::theme::spacing().space_xxs,
-                popup::settings_chrome_height(cosmic::theme::spacing().space_xxs),
                 popup::HEADER_PADDING,
             ),
         };
@@ -517,58 +521,44 @@ impl StatusHub {
         let spacing = cosmic::theme::spacing().space_xxs;
         let rows = self.settings_rows();
         let row_count = rows.len().max(1);
-        let height = popup::settings_body_height(
-            row_count,
-            popup::SETTINGS_ROW,
-            spacing,
-            popup::settings_chrome_height(spacing),
-            popup::HEADER_PADDING,
-        );
+        let height = popup::settings_body_height(row_count, spacing, popup::HEADER_PADDING);
 
-        let appearance_row: Element<'_, Message> = cosmic::widget::container(
-            cosmic::widget::row::with_children(vec![
-                text::body(fl!("colour-icons")).width(Length::Fill).into(),
-                cosmic::widget::toggler(
-                    self.draft_appearance
-                        .unwrap_or(self.appearance)
-                        .colour_icons(),
-                )
-                .on_toggle(Message::ToggleColourIcons)
-                .into(),
-            ])
-            .align_y(cosmic::iced::Alignment::Center)
-            .spacing(cosmic::theme::spacing().space_xs),
-        )
-        .width(Length::Fill)
-        .height(Length::Fixed(f32::from(popup::SETTINGS_APPEARANCE_ROW)))
-        .padding([0, popup::SETTINGS_ROW_RIGHT_PADDING])
-        .align_y(cosmic::iced::Alignment::Center)
-        .into();
-        let tray_rows: Element<'_, Message> = if rows.is_empty() {
-            cosmic::widget::container(text::body(fl!("empty-state")))
+        let appearance_row = cosmic::widget::row::with_children(vec![
+            text::body(fl!("colour-icons"))
                 .width(Length::Fill)
-                .height(Length::Fixed(f32::from(popup::SETTINGS_ROW)))
-                .align_y(cosmic::iced::Alignment::Center)
-                .into()
-        } else {
-            cosmic::widget::column::with_children(
-                rows.into_iter()
-                    .map(|item| self.settings_row(item))
-                    .collect::<Vec<_>>(),
+                .wrapping(Wrapping::Word)
+                .into(),
+            cosmic::widget::toggler(
+                self.draft_appearance
+                    .unwrap_or(self.appearance)
+                    .colour_icons(),
             )
-            .width(Length::Fill)
-            .spacing(spacing)
-            .into()
-        };
-        let list = cosmic::widget::column::with_children(vec![
-            Self::settings_section_heading(fl!("appearance")),
-            appearance_row,
-            cosmic::widget::divider::horizontal::default().into(),
-            Self::settings_section_heading(fl!("tray-icons")),
-            tray_rows,
+            .width(Length::Shrink)
+            .on_toggle(Message::ToggleColourIcons)
+            .into(),
         ])
         .width(Length::Fill)
-        .spacing(spacing);
+        .align_y(cosmic::iced::Alignment::Center)
+        .spacing(cosmic::theme::spacing().space_xs);
+        let appearance_controls: Element<'_, Message> =
+            cosmic::widget::list_column().add(appearance_row).into();
+        let tray_rows: Element<'_, Message> = if rows.is_empty() {
+            cosmic::widget::list_column()
+                .add(text::body(fl!("empty-state")))
+                .into()
+        } else {
+            rows.into_iter()
+                .fold(cosmic::widget::list_column(), |list, item| {
+                    list.add(self.settings_row(item))
+                })
+                .into()
+        };
+        let list = cosmic::widget::column::with_children(vec![
+            Self::settings_section(fl!("appearance"), appearance_controls),
+            Self::settings_section(fl!("tray-icons"), tray_rows),
+        ])
+        .width(Length::Fill)
+        .spacing(popup::SETTINGS_SECTION_SPACING);
 
         popup::settings_list(list, height, popup::HEADER_PADDING)
     }
@@ -642,12 +632,6 @@ impl StatusHub {
         let row = cosmic::widget::container(row)
             .width(Length::Fill)
             .height(Length::Fixed(f32::from(popup::SETTINGS_ROW)))
-            .padding([
-                0,
-                popup::SETTINGS_ROW_RIGHT_PADDING,
-                0,
-                popup::SETTINGS_ROW_LEFT_PADDING,
-            ])
             .align_y(cosmic::iced::Alignment::Center);
 
         let row = if self.dragging.as_ref() == Some(&item.key) {
