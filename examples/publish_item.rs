@@ -1,8 +1,8 @@
-use cosmic_status_hub::testkit::{ItemBehaviour, ItemHandle};
+use cosmic_ext_applet_status_hub::testkit::{ItemBehaviour, ItemHandle};
 
 #[tokio::main]
 async fn main() -> zbus::Result<()> {
-    cosmic_status_hub::init_tracing();
+    cosmic_ext_applet_status_hub::init_tracing();
 
     let mut args = std::env::args().skip(1);
     let id = args.next().unwrap_or_else(|| "test-item".to_owned());

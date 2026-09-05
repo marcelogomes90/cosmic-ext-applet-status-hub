@@ -49,7 +49,7 @@
   <url type="vcs-browser">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub</url>
   <provides>
     <id>com.system76.CosmicApplet</id>
-    <binary>cosmic-status-hub</binary>
+    <binary>cosmic-ext-applet-status-hub</binary>
   </provides>
   <requires>
     <display_length compare="ge">360</display_length>
@@ -73,6 +73,15 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.5.3" date="2026-09-05">
+      <description>
+        <p>The installed executable now follows the COSMIC external applet naming convention.</p>
+        <ul>
+          <li>Renames the applet and diagnostic binaries to the <code>cosmic-ext-applet-status-hub</code> namespace.</li>
+          <li>Updates native and Flatpak launch metadata to use the renamed executable consistently.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.5.2" date="2026-09-05">
       <description>
         <p>Status Hub now has its own panel icon and cooperates with the panel when space is limited.</p>

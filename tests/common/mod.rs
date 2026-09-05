@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use cosmic_status_hub::core::model::TraySnapshot;
+use cosmic_ext_applet_status_hub::core::model::TraySnapshot;
 use tokio::sync::watch;
 
 pub const SETTLE: Duration = Duration::from_secs(15);
@@ -11,7 +11,7 @@ pub const SETTLE: Duration = Duration::from_secs(15);
 pub type Snapshots = watch::Receiver<Arc<TraySnapshot>>;
 
 pub fn init() {
-    cosmic_status_hub::init_tracing();
+    cosmic_ext_applet_status_hub::init_tracing();
 }
 
 pub async fn wait_for(

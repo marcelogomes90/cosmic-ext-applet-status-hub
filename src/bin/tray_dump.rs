@@ -1,8 +1,8 @@
-use cosmic_status_hub::core::{self, MemoryOrderStore};
+use cosmic_ext_applet_status_hub::core::{self, MemoryOrderStore};
 
 #[tokio::main]
 async fn main() {
-    cosmic_status_hub::init_tracing();
+    cosmic_ext_applet_status_hub::init_tracing();
 
     let (handle, _join) = core::spawn(
         &tokio::runtime::Handle::current(),

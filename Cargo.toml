@@ -1,6 +1,6 @@
 [package]
-name = "cosmic-status-hub"
-version = "1.5.2"
+name = "cosmic-ext-applet-status-hub"
+version = "1.5.3"
 edition = "2024"
 rust-version = "1.93"
 license = "GPL-3.0-only"
@@ -10,15 +10,15 @@ homepage = "https://github.com/marcelogomes90/cosmic-ext-applet-status-hub"
 readme = "README.md"
 
 [lib]
-name = "cosmic_status_hub"
+name = "cosmic_ext_applet_status_hub"
 path = "src/lib.rs"
 
 [[bin]]
-name = "cosmic-status-hub"
+name = "cosmic-ext-applet-status-hub"
 path = "src/main.rs"
 
 [[bin]]
-name = "cosmic-status-hub-dump"
+name = "cosmic-ext-applet-status-hub-dump"
 path = "src/bin/tray_dump.rs"
 
 [features]
@@ -61,7 +61,7 @@ features = [
 ]
 
 [dev-dependencies]
-cosmic-status-hub = { path = ".", features = ["testkit"] }
+cosmic-ext-applet-status-hub = { path = ".", features = ["testkit"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process"] }
 
 [profile.release]

@@ -3,10 +3,10 @@ mod common;
 use std::sync::Arc;
 
 use common::wait_for;
-use cosmic_status_hub::core::menu::{EntryKind, MenuModel};
-use cosmic_status_hub::core::model::ItemAddress;
-use cosmic_status_hub::core::{self, CoreCommand, CoreHandle, MemoryOrderStore};
-use cosmic_status_hub::testkit::{
+use cosmic_ext_applet_status_hub::core::menu::{EntryKind, MenuModel};
+use cosmic_ext_applet_status_hub::core::model::ItemAddress;
+use cosmic_ext_applet_status_hub::core::{self, CoreCommand, CoreHandle, MemoryOrderStore};
+use cosmic_ext_applet_status_hub::testkit::{
     FakeMenu, FakeWatcher, ItemBehaviour, ItemHandle, MenuBehaviour, PrivateBus,
 };
 use tokio::sync::watch;

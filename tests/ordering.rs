@@ -3,9 +3,9 @@ mod common;
 use std::sync::{Arc, Mutex};
 
 use common::{keys, wait_for, wait_until};
-use cosmic_status_hub::core::model::ItemKey;
-use cosmic_status_hub::core::{self, MemoryOrderStore, OrderStore};
-use cosmic_status_hub::testkit::{FakeWatcher, ItemBehaviour, ItemHandle, PrivateBus};
+use cosmic_ext_applet_status_hub::core::model::ItemKey;
+use cosmic_ext_applet_status_hub::core::{self, MemoryOrderStore, OrderStore};
+use cosmic_ext_applet_status_hub::testkit::{FakeWatcher, ItemBehaviour, ItemHandle, PrivateBus};
 
 #[derive(Clone, Debug, Default)]
 struct SharedOrder(Arc<Mutex<Vec<ItemKey>>>);

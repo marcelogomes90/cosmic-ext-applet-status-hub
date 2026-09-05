@@ -63,7 +63,7 @@ pub fn init_tracing() {
     use tracing_subscriber::EnvFilter;
 
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("warn,cosmic_status_hub=info"));
+        .unwrap_or_else(|_| EnvFilter::new("warn,cosmic_ext_applet_status_hub=info"));
 
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)

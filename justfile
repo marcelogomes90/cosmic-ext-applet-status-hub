@@ -1,4 +1,4 @@
-name := 'cosmic-status-hub'
+name := 'cosmic-ext-applet-status-hub'
 appid := 'io.github.marcelogomes90.cosmic-ext-applet-status-hub'
 
 rootdir := ''

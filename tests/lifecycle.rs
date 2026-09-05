@@ -3,8 +3,8 @@ mod common;
 use std::time::Duration;
 
 use common::{keys, wait_for};
-use cosmic_status_hub::core::{self, MemoryOrderStore};
-use cosmic_status_hub::testkit::{
+use cosmic_ext_applet_status_hub::core::{self, MemoryOrderStore};
+use cosmic_ext_applet_status_hub::testkit::{
     FakeCosmicWatcher, FakeWatcher, ItemBehaviour, ItemHandle, PrivateBus,
 };
 
@@ -434,7 +434,7 @@ async fn an_item_that_answers_one_property_at_a_time_still_resolves_completely()
     assert_eq!(item.icon.icon_name, "application-default");
     assert_eq!(
         item.icon.theme_path.as_deref(),
-        Some(cosmic_status_hub::testkit::THEME_PATH)
+        Some(cosmic_ext_applet_status_hub::testkit::THEME_PATH)
     );
     assert!(item.menu_path.is_some());
     assert!(item.state.is_resolved());

@@ -19,7 +19,7 @@ src/
 │   └── popup.rs menu_view.rs wayland.rs   surfaces, menus, privileged socket
 ├── testkit/    fakes that run on a real throwaway bus (feature = "testkit")
 ├── flatpak.rs  recovering icon paths that belong to another sandbox
-└── bin/        cosmic-status-hub-dump, a headless tray dumper
+└── bin/        cosmic-ext-applet-status-hub-dump, a headless tray dumper
 ```
 
 ## The flow

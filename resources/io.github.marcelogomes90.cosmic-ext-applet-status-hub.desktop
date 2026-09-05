@@ -2,7 +2,7 @@
 Name=Status Hub
 Comment=Application tray items, gathered behind a single panel button
 Type=Application
-Exec=cosmic-status-hub
+Exec=cosmic-ext-applet-status-hub
 Icon=io.github.marcelogomes90.cosmic-ext-applet-status-hub
 Terminal=false
 Categories=COSMIC;
