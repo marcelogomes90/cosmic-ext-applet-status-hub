@@ -8,7 +8,7 @@ use cosmic::widget::{container, divider, icon, image, space, text};
 use crate::applet::message::Message;
 use crate::core::menu::{EntryKind, MenuEntry, MenuIcon, MenuModel, Toggle};
 
-const GLYPH: u16 = 14;
+const GLYPH: u16 = 16;
 
 const INDENT_STEPS: u16 = 3;
 

@@ -12,7 +12,7 @@ pub mod wayland;
 use cosmic::Element;
 use cosmic::app::{Core, Task};
 use cosmic::cctk::sctk::reexports::calloop;
-use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit, Wrapping};
+use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit};
 use cosmic::iced::clipboard::dnd::DndAction;
 use cosmic::iced::clipboard::mime::AsMimeTypes;
 use cosmic::iced::mouse::Interaction;
@@ -20,7 +20,7 @@ use cosmic::iced::platform_specific::runtime::wayland::popup::SctkPositioner;
 use cosmic::iced::platform_specific::shell::commands::popup::destroy_popup;
 use cosmic::iced::{Length, Subscription, window};
 use cosmic::widget::button::Catalog as _;
-use cosmic::widget::{DndSource, Id, dnd_destination, icon, mouse_area, text};
+use cosmic::widget::{DndSource, Id, dnd_destination, icon, list, mouse_area, settings, text};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -129,6 +129,18 @@ fn detect_wing(panel: &str) -> popup::Wing {
     }
 
     popup::Wing::default()
+}
+
+fn symbolic_ink() -> cosmic::theme::Svg {
+    thread_local! {
+        static INK: cosmic::theme::Svg = cosmic::theme::Svg::custom(|theme: &cosmic::Theme| {
+            cosmic::iced::widget::svg::Style {
+                color: Some(theme.cosmic().background(theme.transparent).on.into()),
+            }
+        });
+    }
+
+    INK.with(cosmic::theme::Svg::clone)
 }
 
 fn accent_icon_style(
@@ -250,6 +262,12 @@ impl StatusHub {
         .class(cosmic::theme::Button::AppletIcon)
     }
 
+    fn grid_inset(&self) -> u16 {
+        let (button_width, _) = self.button_size();
+        let glyph_inset = button_width.saturating_sub(self.item_icon_size()) / 2;
+        popup::MARGIN_X.saturating_sub(glyph_inset)
+    }
+
     fn tray_geometry(&self) -> popup::GridGeometry {
         let (item_width, item_height) = self.button_size();
         let (_, popup_items) = self.partition_items(&self.pins);
@@ -259,8 +277,8 @@ impl StatusHub {
             u32::from(item_width),
             u32::from(item_height),
             u32::from(self.tray_spacing()),
-            u32::from(popup::TRAY_HORIZONTAL_PADDING.saturating_add(self.lead())),
-            u32::from(popup::HEADER_PADDING),
+            u32::from(self.grid_inset()),
+            u32::from(popup::MARGIN_Y),
         )
     }
 
@@ -329,11 +347,7 @@ impl StatusHub {
 
         cosmic::widget::icon(handle)
             .class(if symbolic {
-                cosmic::theme::Svg::Custom(std::rc::Rc::new(|theme: &cosmic::Theme| {
-                    cosmic::iced::widget::svg::Style {
-                        color: Some(theme.cosmic().background(theme.transparent).on.into()),
-                    }
-                }))
+                symbolic_ink()
             } else {
                 cosmic::theme::Svg::default()
             })
@@ -342,29 +356,33 @@ impl StatusHub {
             .into()
     }
 
-    fn drag_grip<'a, M: 'a + 'static>() -> Element<'a, M> {
-        cosmic::widget::container(
-            icon::from_name(popup::DRAG_HANDLE_ICON).size(popup::DRAG_HANDLE_SIZE),
-        )
-        .width(Length::Fixed(f32::from(popup::DRAG_HANDLE_TARGET)))
-        .height(Length::Fixed(f32::from(popup::SETTINGS_ROW)))
-        .align_x(cosmic::iced::Alignment::Center)
+    fn drag_grip<'a, M: 'a>() -> Element<'a, M> {
+        icon::from_name(popup::DRAG_HANDLE_ICON)
+            .size(popup::DRAG_HANDLE_SIZE)
+            .symbolic(true)
+            .icon()
+            .class(symbolic_ink())
+            .into()
+    }
+
+    fn settings_row_content<'a, M: 'a + 'static>(
+        handle: icon::Handle,
+        size: u16,
+        label: String,
+        toggler: Element<'a, M>,
+    ) -> Element<'a, M> {
+        cosmic::widget::row::with_children(vec![
+            Self::drag_grip(),
+            Self::icon_glyph(handle, size),
+            text::body(label)
+                .width(Length::Fill)
+                .ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(1)))
+                .into(),
+            toggler,
+        ])
         .align_y(cosmic::iced::Alignment::Center)
+        .spacing(cosmic::theme::spacing().space_xs)
         .into()
-    }
-
-    fn settings_section_heading<M: 'static>(title: String) -> Element<'static, M> {
-        cosmic::widget::container(text::heading(title))
-            .width(Length::Fill)
-            .height(Length::Fixed(f32::from(popup::SETTINGS_SECTION_HEADER)))
-            .align_y(cosmic::iced::Alignment::Center)
-            .into()
-    }
-
-    fn settings_section(title: String, controls: Element<'_, Message>) -> Element<'_, Message> {
-        cosmic::widget::column::with_children(vec![Self::settings_section_heading(title), controls])
-            .spacing(popup::SETTINGS_SECTION_CONTENT_SPACING)
-            .into()
     }
 
     fn settings_drag_preview(
@@ -373,29 +391,18 @@ impl StatusHub {
         label: String,
         pinned: bool,
     ) -> Element<'static, ()> {
-        let content = cosmic::widget::row::with_children(vec![
-            Self::drag_grip(),
-            Self::icon_glyph(handle, size),
-            text::body(label)
-                .width(Length::Fill)
-                .ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(1)))
-                .into(),
-            cosmic::widget::toggler(pinned).into(),
-        ])
-        .align_y(cosmic::iced::Alignment::Center)
-        .spacing(cosmic::theme::spacing().space_xs);
+        let content = Self::settings_row_content(
+            handle,
+            size,
+            label,
+            cosmic::widget::toggler(pinned).width(Length::Shrink).into(),
+        );
 
         cosmic::widget::container(content)
             .width(Length::Fill)
-            .height(Length::Fixed(f32::from(popup::SETTINGS_ROW)))
-            .padding([
-                0,
-                popup::SETTINGS_ROW_RIGHT_PADDING,
-                0,
-                popup::SETTINGS_ROW_LEFT_PADDING,
-            ])
+            .padding(cosmic::applet::menu_control_padding())
             .align_y(cosmic::iced::Alignment::Center)
-            .class(cosmic::theme::Container::Primary)
+            .class(cosmic::theme::Container::List)
             .into()
     }
 
@@ -411,13 +418,13 @@ impl StatusHub {
         let body = match self.body {
             PopupBody::Items => self.items_height(),
             PopupBody::Settings => popup::settings_body_height(
-                self.snapshot.items.len().max(1),
-                cosmic::theme::spacing().space_xxs,
-                popup::HEADER_PADDING,
+                self.settings_rows().len(),
+                popup::list_row_spacing(),
+                popup::MARGIN_Y,
             ),
         };
 
-        let header = popup::header_height(popup::HEADER_CONTROL, popup::HEADER_PADDING);
+        let header = popup::header_height(popup::HEADER_CONTROL, popup::MARGIN_Y);
         let separator = popup::separator_height();
         if self.menu.is_some() && self.menu_origin == MenuOrigin::Hub {
             popup::HubLayout::with_menu(header, separator, body, popup::menu_separator_height())
@@ -453,6 +460,7 @@ impl StatusHub {
                     .symbolic(true),
             )
             .class(accent_icon_button())
+            .padding(popup::header_icon_padding())
             .width(Length::Fixed(control))
             .height(Length::Fixed(control));
             settings.on_press(Message::OpenSettings).into()
@@ -467,8 +475,8 @@ impl StatusHub {
         popup::header(
             title,
             action,
-            popup::header_height(popup::HEADER_CONTROL, popup::HEADER_PADDING),
-            popup::HEADER_PADDING,
+            popup::header_height(popup::HEADER_CONTROL, popup::MARGIN_Y),
+            popup::MARGIN_Y,
             self.menu.is_some().then_some(Message::DismissMenu),
         )
     }
@@ -507,7 +515,7 @@ impl StatusHub {
             popup_items.into_iter().map(|item| self.item_button(item)),
             spacing,
             self.tray_geometry().height,
-            self.lead(),
+            self.grid_inset(),
         )
     }
 
@@ -518,49 +526,32 @@ impl StatusHub {
             false,
             self.appearance.colour_icons(),
         );
-        let spacing = cosmic::theme::spacing().space_xxs;
+        let spacing = popup::list_row_spacing();
         let rows = self.settings_rows();
-        let row_count = rows.len().max(1);
-        let height = popup::settings_body_height(row_count, spacing, popup::HEADER_PADDING);
+        let height = popup::settings_body_height(rows.len(), spacing, popup::MARGIN_Y);
 
-        let appearance_row = cosmic::widget::row::with_children(vec![
-            text::body(fl!("colour-icons"))
-                .width(Length::Fill)
-                .wrapping(Wrapping::Word)
-                .into(),
-            cosmic::widget::toggler(
+        let appearance = settings::section().title(fl!("appearance")).add(
+            settings::item::builder(fl!("colour-icons")).toggler(
                 self.draft_appearance
                     .unwrap_or(self.appearance)
                     .colour_icons(),
-            )
-            .width(Length::Shrink)
-            .on_toggle(Message::ToggleColourIcons)
-            .into(),
-        ])
-        .width(Length::Fill)
-        .align_y(cosmic::iced::Alignment::Center)
-        .spacing(cosmic::theme::spacing().space_xs);
-        let appearance_controls: Element<'_, Message> =
-            cosmic::widget::list_column().add(appearance_row).into();
-        let tray_rows: Element<'_, Message> = if rows.is_empty() {
-            cosmic::widget::list_column()
-                .add(text::body(fl!("empty-state")))
-                .into()
+                Message::ToggleColourIcons,
+            ),
+        );
+
+        let tray = settings::section().title(fl!("tray-icons"));
+        let tray = if rows.is_empty() {
+            tray.add(text::body(fl!("empty-state")))
         } else {
             rows.into_iter()
-                .fold(cosmic::widget::list_column(), |list, item| {
-                    list.add(self.settings_row(item))
-                })
-                .into()
+                .fold(tray, |tray, item| tray.add(self.settings_row(item)))
         };
-        let list = cosmic::widget::column::with_children(vec![
-            Self::settings_section(fl!("appearance"), appearance_controls),
-            Self::settings_section(fl!("tray-icons"), tray_rows),
-        ])
-        .width(Length::Fill)
-        .spacing(popup::SETTINGS_SECTION_SPACING);
 
-        popup::settings_list(list, height, popup::HEADER_PADDING)
+        let list = cosmic::widget::column::with_children(vec![appearance.into(), tray.into()])
+            .width(Length::Fill)
+            .spacing(popup::section_spacing());
+
+        popup::settings_list(list, height, popup::MARGIN_Y)
     }
 
     fn drag_over(&mut self, target: &crate::core::model::ItemKey) -> Task<Message> {
@@ -591,8 +582,10 @@ impl StatusHub {
             .collect()
     }
 
-    fn settings_row<'a>(&'a self, item: &'a crate::core::model::TrayItem) -> Element<'a, Message> {
-        let spacing = cosmic::theme::spacing();
+    fn settings_row<'a>(
+        &'a self,
+        item: &'a crate::core::model::TrayItem,
+    ) -> list::ListButton<'a, Message> {
         let key = item.key.clone();
         let pinned = self
             .draft
@@ -600,12 +593,8 @@ impl StatusHub {
             .unwrap_or(&self.pins)
             .contains(&item.key);
 
-        let label_text = item.label().to_owned();
-        let label = text::body(label_text.clone())
-            .width(Length::Fill)
-            .ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(1)));
-
-        let size = self.item_icon_size().min(popup::SETTINGS_ROW);
+        let label = item.label().to_owned();
+        let size = self.item_icon_size().min(popup::SETTINGS_ROW_ICON);
         let handle = self
             .icons
             .borrow()
@@ -618,60 +607,53 @@ impl StatusHub {
             .cloned()
             .unwrap_or_else(|| icon::from_name("application-default").size(size).handle());
 
-        let row = cosmic::widget::row::with_children(vec![
-            Self::drag_grip(),
-            Self::icon_glyph(handle.clone(), size),
-            label.into(),
+        let toggle_key = key.clone();
+        let row = Self::settings_row_content(
+            handle.clone(),
+            size,
+            label.clone(),
             cosmic::widget::toggler(pinned)
-                .on_toggle(move |_| Message::TogglePin(key.clone()))
+                .width(Length::Shrink)
+                .on_toggle(move |_| Message::TogglePin(toggle_key.clone()))
                 .into(),
-        ])
-        .align_y(cosmic::iced::Alignment::Center)
-        .spacing(spacing.space_xs);
+        );
 
-        let row = cosmic::widget::container(row)
-            .width(Length::Fill)
-            .height(Length::Fixed(f32::from(popup::SETTINGS_ROW)))
-            .align_y(cosmic::iced::Alignment::Center);
+        let source_id = Id::from(format!("status-hub-reorder-source-{key}"));
+        let target_id = Id::from(format!("status-hub-reorder-target-{key}"));
+        let start_key = key.clone();
+        let target_key = key.clone();
 
-        let row = if self.dragging.as_ref() == Some(&item.key) {
-            popup::selected_item(row)
-        } else {
-            row.into()
-        };
-        let row = mouse_area(row).interaction(if self.dragging.as_ref() == Some(&item.key) {
-            Interaction::Grabbing
-        } else {
-            Interaction::Grab
-        });
-
-        let drag_key = item.key.clone();
-        let drag_handle = DndSource::with_id(
-            row,
-            Id::from(format!("status-hub-reorder-source-{drag_key}")),
-        )
-        .action(DndAction::Move)
-        .drag_threshold(6.0)
-        .drag_content(|| ReorderData)
-        .drag_icon(move |offset| {
-            let preview =
-                Self::settings_drag_preview(handle.clone(), size, label_text.clone(), pinned);
-            let state = preview.as_widget().state();
-            (preview, state, offset)
-        })
-        .on_start(Some(Message::DragStart(drag_key)))
-        .on_cancel(Some(Message::DragEnd))
-        .on_finish(Some(Message::DragEnd));
-
-        let target = item.key.clone();
-        dnd_destination(drag_handle, vec![Cow::Borrowed(REORDER_MIME)])
-            .id(Id::from(format!("status-hub-reorder-target-{target}")))
-            .action(DndAction::Move)
-            .preferred_action(DndAction::Move)
-            .on_enter(move |_, _, _| Message::DragOver(target.clone()))
-            .on_drop(|_, _| Message::DragEnd)
-            .on_finish(|_, _, _, _, _| Message::DragEnd)
-            .into()
+        list::button(row)
+            .on_press(Message::TogglePin(key))
+            .selected(self.dragging.as_ref() == Some(&item.key))
+            .with_dnd_source(Box::new(move |element| {
+                DndSource::with_id(element, source_id)
+                    .action(DndAction::Move)
+                    .drag_threshold(6.0)
+                    .drag_content(|| Box::new(ReorderData) as Box<dyn AsMimeTypes + Send>)
+                    .drag_icon(move |offset| {
+                        let preview = Self::settings_drag_preview(
+                            handle.clone(),
+                            size,
+                            label.clone(),
+                            pinned,
+                        );
+                        let state = preview.as_widget().state();
+                        (preview, state, offset)
+                    })
+                    .on_start(Some(Message::DragStart(start_key.clone())))
+                    .on_cancel(Some(Message::DragEnd))
+                    .on_finish(Some(Message::DragEnd))
+            }))
+            .with_dnd_destination(Box::new(move |element| {
+                dnd_destination(element, vec![Cow::Borrowed(REORDER_MIME)])
+                    .id(target_id)
+                    .action(DndAction::Move)
+                    .preferred_action(DndAction::Move)
+                    .on_enter(move |_, _, _| Message::DragOver(target_key.clone()))
+                    .on_drop(|_, _| Message::DragEnd)
+                    .on_finish(|_, _, _, _, _| Message::DragEnd)
+            }))
     }
 
     fn request_token(&mut self, action: PendingTokenAction) -> Task<Message> {
@@ -1369,7 +1351,10 @@ impl cosmic::Application for StatusHub {
         let size = self.item_icon_size();
         let hub = self
             .applet_button(Self::icon_glyph(
-                icon::from_name(popup::PANEL_ICON).size(size).handle(),
+                icon::from_name(popup::PANEL_ICON)
+                    .size(size)
+                    .symbolic(true)
+                    .handle(),
                 size,
             ))
             .on_press(Message::TogglePopup);

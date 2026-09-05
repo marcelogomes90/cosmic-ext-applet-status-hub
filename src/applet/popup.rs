@@ -3,32 +3,54 @@ use std::sync::LazyLock;
 use cosmic::Element;
 use cosmic::applet::cosmic_panel_config::PanelAnchor;
 use cosmic::iced::advanced::text::{Ellipsize, EllipsizeHeightLimit};
+use cosmic::iced::widget::scrollable::{Direction, Scrollbar};
 use cosmic::iced::{Alignment, Border, Color, Length, Limits, Rectangle, Shadow, Size};
 use cosmic::widget::{autosize, container, divider, flex_row, mouse_area, scrollable, text};
 
 pub const SURFACE_WIDTH: u16 = 360;
 const MAX_HEIGHT: u16 = 1080;
-pub const SETTINGS_MAX_HEIGHT: u16 = 650;
+pub const SETTINGS_MAX_HEIGHT: u16 = 800;
 
 pub const HEADER_CONTROL: u16 = 32;
 pub const HEADER_ICON: u16 = 16;
-pub const SETTINGS_ROW: u16 = 36;
-pub const SETTINGS_APPEARANCE_ROW: u16 = 40;
-pub const SETTINGS_SECTION_HEADER: u16 = 28;
-pub const SETTINGS_SECTION_CONTENT_SPACING: u16 = 12;
-pub const SETTINGS_SECTION_SPACING: u16 = 16;
-pub const DRAG_HANDLE_ICON: &str = "grip-lines-symbolic";
 pub const DRAG_HANDLE_SIZE: u16 = 16;
-pub const DRAG_HANDLE_TARGET: u16 = 24;
-pub const SETTINGS_ROW_LEFT_PADDING: u16 = 8;
-pub const SETTINGS_ROW_RIGHT_PADDING: u16 = 12;
+pub const SETTINGS_ROW_ICON: u16 = 24;
+
+pub const LIST_MIN_ROW: u16 = 32;
+
+const SECTION_HEADER: u16 = 21;
+const SECTION_HEADER_SPACING: u16 = 8;
+
+pub const MARGIN_X: u16 = 16;
+pub const MARGIN_Y: u16 = 12;
+
+pub const DRAG_HANDLE_ICON: &str = "grip-lines-symbolic";
 pub const PANEL_ICON: &str = "view-more-horizontal-symbolic";
 pub const SETTINGS_ICON: &str = "emblem-system-symbolic";
-pub const CONTENT_PADDING: u16 = 16;
-pub const TRAY_HORIZONTAL_PADDING: u16 = 8;
-pub const HEADER_PADDING: u16 = 12;
-pub const NOTICE_PADDING: u16 = HEADER_PADDING;
-pub const SETTINGS_HORIZONTAL_PADDING: u16 = CONTENT_PADDING;
+
+pub fn header_icon_padding() -> u16 {
+    HEADER_CONTROL.saturating_sub(HEADER_ICON) / 2
+}
+
+pub fn section_spacing() -> u16 {
+    cosmic::theme::spacing().space_s
+}
+
+pub fn list_row_spacing() -> u16 {
+    cosmic::theme::spacing().space_xxs
+}
+
+pub fn list_row_height(spacing: u16) -> u16 {
+    LIST_MIN_ROW.saturating_add(spacing.saturating_mul(2))
+}
+
+pub fn section_height(rows: usize, spacing: u16) -> u16 {
+    let rows = u16::try_from(rows).unwrap_or(u16::MAX);
+    SECTION_HEADER
+        .saturating_add(SECTION_HEADER_SPACING)
+        .saturating_add(rows.saturating_mul(list_row_height(spacing)))
+        .saturating_add(rows.saturating_sub(1))
+}
 
 static TRAY_AUTOSIZE_ID: LazyLock<cosmic::iced::id::Id> =
     LazyLock::new(|| cosmic::iced::id::Id::new("cosmic-status-hub-tray-popup"));
@@ -125,28 +147,18 @@ pub fn header_height(control: u16, vertical_padding: u16) -> u16 {
 }
 
 pub fn settings_body_height(rows: usize, spacing: u16, padding: u16) -> u16 {
-    let rows = u16::try_from(rows).unwrap_or(u16::MAX);
-    rows.saturating_mul(SETTINGS_ROW.saturating_add(spacing.saturating_mul(2)))
-        .saturating_add(rows.saturating_sub(1))
-        .saturating_add(settings_chrome_height(spacing))
+    section_height(1, spacing)
+        .saturating_add(section_spacing())
+        .saturating_add(section_height(rows.max(1), spacing))
         .saturating_add(padding.saturating_mul(2))
         .clamp(1, settings_body_max_height())
 }
 
 pub fn settings_body_max_height() -> u16 {
     SETTINGS_MAX_HEIGHT
-        .saturating_sub(header_height(HEADER_CONTROL, HEADER_PADDING))
+        .saturating_sub(header_height(HEADER_CONTROL, MARGIN_Y))
         .saturating_sub(separator_height())
         .max(1)
-}
-
-pub fn settings_chrome_height(spacing: u16) -> u16 {
-    SETTINGS_SECTION_HEADER
-        .saturating_mul(2)
-        .saturating_add(SETTINGS_APPEARANCE_ROW)
-        .saturating_add(spacing.saturating_mul(2))
-        .saturating_add(SETTINGS_SECTION_CONTENT_SPACING.saturating_mul(2))
-        .saturating_add(SETTINGS_SECTION_SPACING)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -212,7 +224,7 @@ pub fn item_grid<'a, Message: 'static + Clone>(
     items: impl IntoIterator<Item = Element<'a, Message>>,
     spacing: u16,
     height: u16,
-    lead: u16,
+    horizontal_padding: u16,
 ) -> Element<'a, Message> {
     let grid = flex_row(items.into_iter().collect())
         .spacing(spacing)
@@ -222,7 +234,7 @@ pub fn item_grid<'a, Message: 'static + Clone>(
     container(grid)
         .width(Length::Fill)
         .height(Length::Fixed(f32::from(height)))
-        .padding([HEADER_PADDING, TRAY_HORIZONTAL_PADDING.saturating_add(lead)])
+        .padding([MARGIN_Y, horizontal_padding])
         .align_x(Alignment::Start)
         .align_y(Alignment::Center)
         .into()
@@ -263,7 +275,7 @@ fn fixed_body<'a, Message: 'static>(
     container(content)
         .width(Length::Fill)
         .height(Length::Fixed(f32::from(height)))
-        .padding([vertical_padding, CONTENT_PADDING])
+        .padding([vertical_padding, MARGIN_X])
         .align_x(Alignment::Center)
         .align_y(Alignment::Center)
         .into()
@@ -291,17 +303,19 @@ pub fn selected_item<'a, Message: 'static>(
         .into()
 }
 
+fn hidden_scroll() -> Direction {
+    Direction::Vertical(Scrollbar::hidden())
+}
+
 fn separator<'a, Message: 'static>() -> Element<'a, Message> {
-    let spacing = cosmic::theme::spacing();
     container(divider::horizontal::default())
-        .padding([0, spacing.space_s])
+        .padding([0, MARGIN_X])
         .into()
 }
 
 fn menu_separator<'a, Message: 'static>() -> Element<'a, Message> {
-    let spacing = cosmic::theme::spacing();
     container(divider::horizontal::default())
-        .padding([0, spacing.space_s])
+        .padding([0, MARGIN_X])
         .into()
 }
 
@@ -346,7 +360,7 @@ pub fn header<Message: 'static + Clone>(
     )
     .width(Length::Fill)
     .height(Length::Fixed(f32::from(height)))
-    .padding([vertical_padding, CONTENT_PADDING])
+    .padding([vertical_padding, MARGIN_X])
     .align_y(Alignment::Center)
     .into()
 }
@@ -415,7 +429,7 @@ pub fn panel_surface<'a, Message: 'static>(
 }
 
 pub fn notice_height(row: u16) -> u16 {
-    row.saturating_add(NOTICE_PADDING.saturating_mul(2))
+    row.saturating_add(MARGIN_Y.saturating_mul(2))
         .min(MAX_HEIGHT)
 }
 
@@ -424,7 +438,7 @@ pub fn notice<'a, Message: 'static>(message: String, height: u16) -> Element<'a,
         .center()
         .ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(2)));
 
-    fixed_body(message, height, NOTICE_PADDING)
+    fixed_body(message, height, MARGIN_Y)
 }
 
 pub fn settings_list<'a, Message: 'static>(
@@ -432,10 +446,10 @@ pub fn settings_list<'a, Message: 'static>(
     height: u16,
     padding: u16,
 ) -> Element<'a, Message> {
-    container(scrollable(list.into()))
+    container(scrollable(list.into()).direction(hidden_scroll()))
         .width(Length::Fill)
         .height(Length::Fixed(f32::from(height)))
-        .padding([padding, SETTINGS_HORIZONTAL_PADDING])
+        .padding([padding, MARGIN_X])
         .into()
 }
 
@@ -460,13 +474,15 @@ pub fn hub_surface<'a, Message: 'static>(
     let hub = vec![header, separator(), body];
     let children = match menu {
         Some(menu) => {
-            let menu = container(scrollable(container(menu).width(Length::Fill)))
-                .width(Length::Fill)
-                .max_height(f32::from(menu_height_budget(
-                    layout.height(),
-                    menu_separator_height(),
-                )))
-                .into();
+            let menu = container(
+                scrollable(container(menu).width(Length::Fill)).direction(hidden_scroll()),
+            )
+            .width(Length::Fill)
+            .max_height(f32::from(menu_height_budget(
+                layout.height(),
+                menu_separator_height(),
+            )))
+            .into();
             if menu_comes_first(anchor) {
                 let mut children = vec![menu, menu_separator()];
                 children.extend(hub);
@@ -493,9 +509,10 @@ pub fn hub_surface<'a, Message: 'static>(
 }
 
 pub fn menu_surface<Message: 'static>(menu: Element<'_, Message>) -> Element<'_, Message> {
-    let body = container(scrollable(container(menu).width(Length::Fill)))
-        .width(Length::Fill)
-        .max_height(f32::from(MAX_HEIGHT));
+    let body =
+        container(scrollable(container(menu).width(Length::Fill)).direction(hidden_scroll()))
+            .width(Length::Fill)
+            .max_height(f32::from(MAX_HEIGHT));
 
     autosize::autosize(
         themed_container(
@@ -551,7 +568,7 @@ mod tests {
     fn the_empty_state_is_taller_than_the_row_it_replaces() {
         let row = GridGeometry::calculate(0, 48, 40, 8, 16, 12).height;
 
-        assert_eq!(notice_height(row), row + NOTICE_PADDING * 2);
+        assert_eq!(notice_height(row), row + MARGIN_Y * 2);
         assert_eq!(notice_height(MAX_HEIGHT), MAX_HEIGHT);
     }
 
@@ -641,8 +658,46 @@ mod tests {
     fn the_settings_list_is_as_tall_as_the_rows_it_holds() {
         assert_eq!(
             settings_body_height(3, 4, 12),
-            3 * (SETTINGS_ROW + 8) + 2 + settings_chrome_height(4) + 24
+            section_height(1, 4) + section_spacing() + section_height(3, 4) + 24
         );
+    }
+
+    #[test]
+    fn the_header_icon_sits_in_the_middle_of_its_control() {
+        assert_eq!(
+            header_icon_padding() * 2 + HEADER_ICON,
+            HEADER_CONTROL,
+            "the glyph must centre itself whatever the density does to space_xxs"
+        );
+    }
+
+    #[test]
+    fn the_outer_margins_do_not_follow_the_density() {
+        assert_eq!(MARGIN_X, 16);
+        assert_eq!(MARGIN_Y, 12);
+    }
+
+    #[test]
+    fn a_settings_row_is_as_tall_as_the_list_it_sits_in() {
+        assert_eq!(list_row_height(4), LIST_MIN_ROW + 8);
+        assert_eq!(list_row_height(12), LIST_MIN_ROW + 24);
+    }
+
+    #[test]
+    fn a_section_pays_for_its_title_once_and_a_divider_between_each_pair() {
+        let one = section_height(1, 4);
+        let two = section_height(2, 4);
+
+        assert_eq!(two - one, list_row_height(4) + 1);
+        assert_eq!(
+            one,
+            SECTION_HEADER + SECTION_HEADER_SPACING + list_row_height(4)
+        );
+    }
+
+    #[test]
+    fn a_denser_theme_gives_the_same_list_a_shorter_body() {
+        assert!(settings_body_height(4, 4, 12) < settings_body_height(4, 12, 12));
     }
 
     #[test]
@@ -652,22 +707,10 @@ mod tests {
             settings_body_max_height()
         );
         assert_eq!(
-            header_height(HEADER_CONTROL, HEADER_PADDING)
+            header_height(HEADER_CONTROL, MARGIN_Y)
                 + separator_height()
                 + settings_body_max_height(),
             SETTINGS_MAX_HEIGHT
-        );
-    }
-
-    #[test]
-    fn appearance_and_tray_sections_reserve_their_fixed_height() {
-        assert_eq!(
-            settings_chrome_height(4),
-            SETTINGS_SECTION_HEADER * 2
-                + SETTINGS_APPEARANCE_ROW
-                + 8
-                + SETTINGS_SECTION_CONTENT_SPACING * 2
-                + SETTINGS_SECTION_SPACING
         );
     }
 
