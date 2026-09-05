@@ -981,7 +981,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-status-hub"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "cosmic-freedesktop-icons",
  "cosmic-status-hub",

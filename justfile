@@ -12,12 +12,14 @@ bin-dst := base-dir / 'bin' / name
 desktop-dst := base-dir / 'share' / 'applications' / appid + '.desktop'
 metainfo-dst := base-dir / 'share' / 'metainfo' / appid + '.metainfo.xml'
 icon-dst := base-dir / 'share' / 'icons' / 'hicolor' / 'scalable' / 'apps' / appid + '.svg'
+symbolic-icon-dst := base-dir / 'share' / 'icons' / 'hicolor' / 'scalable' / 'apps' / appid + '-symbolic.svg'
 
 user-base := env('XDG_DATA_HOME', env('HOME') / '.local' / 'share')
 user-bin-dst := env('HOME') / '.local' / 'bin' / name
 user-desktop-dst := user-base / 'applications' / appid + '.desktop'
 user-metainfo-dst := user-base / 'metainfo' / appid + '.metainfo.xml'
 user-icon-dst := user-base / 'icons' / 'hicolor' / 'scalable' / 'apps' / appid + '.svg'
+user-symbolic-icon-dst := user-base / 'icons' / 'hicolor' / 'scalable' / 'apps' / appid + '-symbolic.svg'
 
 flatpak-dir := 'flatpak' / appid
 manifest := flatpak-dir / appid + '.json'
@@ -74,21 +76,23 @@ install:
     install -Dm0644 resources/{{appid}}.desktop {{desktop-dst}}
     install -Dm0644 resources/{{appid}}.metainfo.xml {{metainfo-dst}}
     install -Dm0644 resources/{{appid}}.svg {{icon-dst}}
+    install -Dm0644 resources/{{appid}}-symbolic.svg {{symbolic-icon-dst}}
 
 uninstall:
-    rm -f {{bin-dst}} {{desktop-dst}} {{metainfo-dst}} {{icon-dst}}
+    rm -f {{bin-dst}} {{desktop-dst}} {{metainfo-dst}} {{icon-dst}} {{symbolic-icon-dst}}
 
 install-user:
     install -Dm0755 {{bin-src}} {{user-bin-dst}}
     install -Dm0644 resources/{{appid}}.metainfo.xml {{user-metainfo-dst}}
     install -Dm0644 resources/{{appid}}.svg {{user-icon-dst}}
+    install -Dm0644 resources/{{appid}}-symbolic.svg {{user-symbolic-icon-dst}}
     mkdir -p "$(dirname {{user-desktop-dst}})"
     sed 's|^Exec=.*|Exec={{user-bin-dst}}|' resources/{{appid}}.desktop > {{user-desktop-dst}}
     chmod 0644 {{user-desktop-dst}}
     @echo "Installed. Add 'Status Hub' in Settings -> Desktop -> Panel -> Applets."
 
 uninstall-user:
-    rm -f {{user-bin-dst}} {{user-desktop-dst}} {{user-metainfo-dst}} {{user-icon-dst}}
+    rm -f {{user-bin-dst}} {{user-desktop-dst}} {{user-metainfo-dst}} {{user-icon-dst}} {{user-symbolic-icon-dst}}
 
 flatpak-sources:
     flatpak run --filesystem="$(pwd)" --share=network \

@@ -40,13 +40,14 @@
         "install -Dm0755 target/release/cosmic-status-hub-dump /app/bin/cosmic-status-hub-dump",
         "install -Dm0644 resources/io.github.marcelogomes90.cosmic-ext-applet-status-hub.desktop /app/share/applications/io.github.marcelogomes90.cosmic-ext-applet-status-hub.desktop",
         "install -Dm0644 resources/io.github.marcelogomes90.cosmic-ext-applet-status-hub.metainfo.xml /app/share/metainfo/io.github.marcelogomes90.cosmic-ext-applet-status-hub.metainfo.xml",
-        "install -Dm0644 resources/io.github.marcelogomes90.cosmic-ext-applet-status-hub.svg /app/share/icons/hicolor/scalable/apps/io.github.marcelogomes90.cosmic-ext-applet-status-hub.svg"
+        "install -Dm0644 resources/io.github.marcelogomes90.cosmic-ext-applet-status-hub.svg /app/share/icons/hicolor/scalable/apps/io.github.marcelogomes90.cosmic-ext-applet-status-hub.svg",
+        "install -Dm0644 resources/io.github.marcelogomes90.cosmic-ext-applet-status-hub-symbolic.svg /app/share/icons/hicolor/scalable/apps/io.github.marcelogomes90.cosmic-ext-applet-status-hub-symbolic.svg"
       ],
       "sources": [
         {
           "type": "git",
           "url": "https://github.com/marcelogomes90/cosmic-ext-applet-status-hub.git",
-          "tag": "v1.5.1"
+          "tag": "v1.5.2"
         },
         "cargo-sources.json"
       ]

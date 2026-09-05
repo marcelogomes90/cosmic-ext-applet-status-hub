@@ -73,6 +73,16 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.5.2" date="2026-09-05">
+      <description>
+        <p>Status Hub now has its own panel icon and cooperates with the panel when space is limited.</p>
+        <ul>
+          <li>Replaces the generic overflow glyph with a dedicated symbolic Status Hub icon.</li>
+          <li>Marks the applet as shrinkable so the panel can move it into overflow when necessary.</li>
+          <li>Installs the symbolic icon in native and Flatpak packages so it resolves consistently after installation.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.5.1" date="2026-09-05">
       <description>
         <p>The popup and the settings view now follow the desktop theme instead of a single density baked into the code, and the settings list is built from the same components COSMIC uses elsewhere.</p>

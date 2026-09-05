@@ -25,7 +25,7 @@ pub const MARGIN_X: u16 = 16;
 pub const MARGIN_Y: u16 = 12;
 
 pub const DRAG_HANDLE_ICON: &str = "grip-lines-symbolic";
-pub const PANEL_ICON: &str = "view-more-horizontal-symbolic";
+pub const PANEL_ICON: &str = "io.github.marcelogomes90.cosmic-ext-applet-status-hub-symbolic";
 pub const SETTINGS_ICON: &str = "emblem-system-symbolic";
 
 pub fn header_icon_padding() -> u16 {
