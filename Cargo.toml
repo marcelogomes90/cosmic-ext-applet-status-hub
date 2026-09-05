@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-status-hub"
-version = "1.5.0"
+version = "1.5.1"
 edition = "2024"
 rust-version = "1.93"
 license = "GPL-3.0-only"
@@ -37,6 +37,7 @@ futures = "0.3"
 cosmic-freedesktop-icons = { git = "https://github.com/pop-os/freedesktop-icons" }
 i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+palette = "0.7"
 resvg = { version = "0.45", default-features = false }
 i18n-embed-fl = "0.10"
 rust-embed = "8"

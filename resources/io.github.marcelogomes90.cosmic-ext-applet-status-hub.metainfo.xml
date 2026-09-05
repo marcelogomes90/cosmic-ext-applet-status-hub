@@ -73,6 +73,20 @@
     <keyword>Panel</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.5.1" date="2026-09-05">
+      <description>
+        <p>The popup and the settings view now follow the desktop theme instead of a single density baked into the code, and the settings list is built from the same components COSMIC uses elsewhere.</p>
+        <ul>
+          <li>Sizes the settings list, its rows and its section titles from the theme's own spacing, so a compact or spacious desktop no longer leaves dead space at the foot of the popup or scrolls before the list is full.</li>
+          <li>Keeps the popup's outer margin at one comfortable value whatever the density, so content never crowds the edge, and lines the header separator up with the title above it.</li>
+          <li>Rebuilds the settings rows on the list components from libcosmic, which gives them hover feedback, rounded ends and the theme's own highlight while a row is dragged.</li>
+          <li>Centres the settings button in the header, which drifted sideways on any density other than the default.</li>
+          <li>Hides the scrollbars, which also returns the strip of width they reserved over the right edge of the content.</li>
+          <li>Raises the ceiling on the settings popup so more of the tray is visible before it scrolls.</li>
+          <li>Stops resolving and repainting the overlay icon that was never drawn, and keeps icon lookup behind its cache, so opening the popup does less work per frame.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.5.0" date="2026-09-04">
       <description>
         <p>Icons can now keep the colours their application published, and the ones Status Hub does repaint come out closer to the artwork they were made from.</p>
