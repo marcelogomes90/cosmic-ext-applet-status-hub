@@ -63,50 +63,44 @@ impl IconCache {
         }
         let theme = &self.theme;
 
-        let mut next = HashMap::with_capacity(snapshot.items.len() * 2);
+        let mut next = HashMap::with_capacity(snapshot.items.len());
         let mut unresolved_primary = false;
 
+        let kind = IconKind::Primary;
         for item in &snapshot.items {
-            for kind in [IconKind::Primary, IconKind::Overlay] {
-                let options = resolve(&item.icon, item.status, kind, u32::from(size));
-
-                if kind == IconKind::Overlay && options.is_empty() {
-                    continue;
-                }
-
-                let key = Key {
-                    address: item.address.clone(),
-                    generation: item.generation,
-                    kind,
-                    size,
-                };
-                let entry = match self.entries.remove(&key) {
-                    Some(entry) if !entry.fallback || !retry_fallbacks => entry,
-                    _ => {
-                        let built = build(&options, size, theme);
-                        tracing::info!(
-                            item = %item.id,
-                            ?kind,
-                            size,
-                            name = options.name.as_deref().unwrap_or("-"),
-                            theme_path = options.theme_path.as_deref().unwrap_or("-"),
-                            pixmap = options.pixels.is_some(),
-                            source = %built.source,
-                            symbolic = built.handle.symbolic,
-                            paint = built.paint,
-                            "icon resolved"
-                        );
-                        Entry {
-                            handle: built.handle,
-                            fallback: built.fallback,
-                        }
+            let key = Key {
+                address: item.address.clone(),
+                generation: item.generation,
+                kind,
+                size,
+            };
+            let entry = match self.entries.remove(&key) {
+                Some(entry) if !entry.fallback || !retry_fallbacks => entry,
+                _ => {
+                    let options = resolve(&item.icon, item.status, kind, u32::from(size));
+                    let built = build(&options, size, theme);
+                    tracing::info!(
+                        item = %item.id,
+                        ?kind,
+                        size,
+                        name = options.name.as_deref().unwrap_or("-"),
+                        theme_path = options.theme_path.as_deref().unwrap_or("-"),
+                        pixmap = options.pixels.is_some(),
+                        source = %built.source,
+                        symbolic = built.handle.symbolic,
+                        paint = built.paint,
+                        "icon resolved"
+                    );
+                    Entry {
+                        handle: built.handle,
+                        fallback: built.fallback,
                     }
-                };
-                if kind == IconKind::Primary && entry.fallback {
-                    unresolved_primary = true;
                 }
-                next.insert(key, entry);
+            };
+            if entry.fallback {
+                unresolved_primary = true;
             }
+            next.insert(key, entry);
         }
 
         self.entries = next;
@@ -616,6 +610,28 @@ mod tests {
 
         assert!(!handle.symbolic);
         assert_eq!(policy, "tinted-detailed");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_multicolour_svg_too_large_to_tint_falls_back_to_the_panel_ink() {
+        let root = test_root("oversized-vector");
+        let filler = "<rect width=\"1\" height=\"1\" fill=\"red\"/>".repeat(9000);
+        let path = svg_at(
+            &root,
+            "oversized",
+            &format!(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\">\
+                 <rect width=\"8\" height=\"16\" fill=\"red\"/>\
+                 <rect x=\"8\" width=\"8\" height=\"16\" fill=\"blue\"/>{filler}</svg>"
+            ),
+        );
+        assert!(std::fs::metadata(&path).unwrap().len() > 256 * 1024);
+
+        let (handle, policy) = handle_for(path, "oversized", 16, &light_panel());
+
+        assert!(handle.symbolic);
+        assert_eq!(policy, "symbolic-painted");
         std::fs::remove_dir_all(root).unwrap();
     }
 

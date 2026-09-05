@@ -6,7 +6,7 @@ use resvg::usvg;
 
 use crate::core::icons::RgbaImage;
 
-use super::paint::{MIN_ALPHA, MIN_LIGHTNESS_SPAN, lightness_of};
+use super::paint::{MIN_ALPHA, MIN_LIGHTNESS_SPAN, lightness_of, straighten};
 
 const MAX_SVG_BYTES: u64 = 256 * 1024;
 
@@ -35,19 +35,9 @@ pub fn render_svg(path: &Path, size: u16) -> Option<RgbaImage> {
 
     let mut bytes = pixmap.data().to_vec();
     for pixel in bytes.as_chunks_mut::<4>().0 {
-        let alpha = u16::from(pixel[3]);
-        if alpha == 0 {
-            pixel[..3].fill(0);
-        } else {
-            for channel in &mut pixel[..3] {
-                *channel = u8::try_from(
-                    (u16::from(*channel) * 255 + alpha / 2)
-                        .checked_div(alpha)
-                        .unwrap_or_default()
-                        .min(255),
-                )
-                .unwrap_or(u8::MAX);
-            }
+        let alpha = pixel[3];
+        for channel in &mut pixel[..3] {
+            *channel = straighten(*channel, alpha);
         }
     }
 
@@ -105,13 +95,10 @@ fn rendered_ink(source: &[u8]) -> Option<RenderedInk> {
         if alpha < MIN_ALPHA {
             continue;
         }
-        let straighten = |channel: u8| {
-            u8::try_from((u16::from(channel) * 255 / u16::from(alpha)).min(255)).unwrap_or(u8::MAX)
-        };
         let colour = [
-            straighten(pixel.red()),
-            straighten(pixel.green()),
-            straighten(pixel.blue()),
+            straighten(pixel.red(), alpha),
+            straighten(pixel.green(), alpha),
+            straighten(pixel.blue(), alpha),
         ];
         let low = colour[0].min(colour[1]).min(colour[2]);
         let high = colour[0].max(colour[1]).max(colour[2]);

@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use palette::{FromColor, LinSrgb, Oklab, Srgb};
+
 use crate::core::icons::RgbaImage;
 
 use super::ThemeContext;
@@ -77,7 +79,7 @@ impl ToneProfile {
         }
         let difference = luminance(pixel).clamp(self.low, self.high) - self.anchor;
         oklab_to_srgb(Oklab {
-            lightness: (self.tint.lightness + difference * self.gain).clamp(0.0, 1.0),
+            l: (self.tint.l + difference * self.gain).clamp(0.0, 1.0),
             ..self.tint
         })
     }
@@ -103,13 +105,9 @@ fn tone_profile(
 
     let span = high - low;
     let tint = srgb_to_oklab(ink);
-    let ink_is_light = tint.is_light();
+    let ink_is_light = is_light(tint);
     let anchor = if ink_is_light { high } else { low };
-    let room = if ink_is_light {
-        tint.lightness
-    } else {
-        1.0 - tint.lightness
-    };
+    let room = if ink_is_light { tint.l } else { 1.0 - tint.l };
     let gain = TINT_GAIN
         .min(MAX_TINT_SHIFT / span.max(f32::EPSILON))
         .min(room / span.max(f32::EPSILON));
@@ -165,99 +163,71 @@ fn badge_colour(pixel: [u8; 4], ink: [u8; 3]) -> [u8; 3] {
     let original = srgb_to_oklab([pixel[0], pixel[1], pixel[2]]);
     let themed = srgb_to_oklab(ink);
     oklab_to_srgb(Oklab {
-        lightness: original.lightness * BADGE_ORIGINAL_WEIGHT
-            + themed.lightness * (1.0 - BADGE_ORIGINAL_WEIGHT),
+        l: original.l * BADGE_ORIGINAL_WEIGHT + themed.l * (1.0 - BADGE_ORIGINAL_WEIGHT),
         a: original.a * BADGE_ORIGINAL_WEIGHT + themed.a * (1.0 - BADGE_ORIGINAL_WEIGHT),
         b: original.b * BADGE_ORIGINAL_WEIGHT + themed.b * (1.0 - BADGE_ORIGINAL_WEIGHT),
     })
 }
 
-#[derive(Clone, Copy)]
-struct Oklab {
-    lightness: f32,
-    a: f32,
-    b: f32,
-}
-
-impl Oklab {
-    fn is_light(self) -> bool {
-        self.lightness >= 0.5
-    }
+fn is_light(colour: Oklab) -> bool {
+    colour.l >= 0.5
 }
 
 pub fn lightness_of(rgb: [u8; 3]) -> f32 {
-    srgb_to_oklab(rgb).lightness
+    srgb_to_oklab(rgb).l
 }
 
 fn luminance(pixel: [u8; 4]) -> f32 {
-    srgb_to_oklab([pixel[0], pixel[1], pixel[2]]).lightness
+    srgb_to_oklab([pixel[0], pixel[1], pixel[2]]).l
 }
 
 fn srgb_to_oklab(rgb: [u8; 3]) -> Oklab {
-    let [red, green, blue] = rgb.map(srgb_to_linear);
-    let l = 0.412_221_46 * red + 0.536_332_55 * green + 0.051_445_995 * blue;
-    let m = 0.211_903_5 * red + 0.680_699_5 * green + 0.107_396_96 * blue;
-    let s = 0.088_302_46 * red + 0.281_718_85 * green + 0.629_978_7 * blue;
-    let [l, m, s] = [l.cbrt(), m.cbrt(), s.cbrt()];
-    Oklab {
-        lightness: 0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s,
-        a: 1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s,
-        b: 0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s,
-    }
+    Oklab::from_color(Srgb::from(rgb).into_format::<f32>().into_linear())
 }
 
 fn oklab_to_srgb(colour: Oklab) -> [u8; 3] {
-    let l = colour.lightness + 0.396_337_78 * colour.a + 0.215_803_76 * colour.b;
-    let m = colour.lightness - 0.105_561_346 * colour.a - 0.063_854_17 * colour.b;
-    let s = colour.lightness - 0.089_484_18 * colour.a - 1.291_485_5 * colour.b;
-    let [l, m, s] = [l * l * l, m * m * m, s * s * s];
-    [
-        4.076_741_7 * l - 3.307_711_6 * m + 0.230_969_94 * s,
-        -1.268_438 * l + 2.609_757_4 * m - 0.341_319_4 * s,
-        -0.004_196_086_3 * l - 0.703_418_6 * m + 1.707_614_7 * s,
-    ]
-    .map(linear_to_srgb)
+    let linear: LinSrgb<f32> = LinSrgb::from_color(colour);
+    Srgb::<f32>::from_linear(linear).into_format::<u8>().into()
 }
 
-fn srgb_to_linear(channel: u8) -> f32 {
-    let channel = f32::from(channel) / 255.0;
-    if channel <= 0.040_45 {
-        channel / 12.92
-    } else {
-        ((channel + 0.055) / 1.055).powf(2.4)
+pub fn straighten(channel: u8, alpha: u8) -> u8 {
+    if alpha == 0 {
+        return 0;
     }
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn linear_to_srgb(channel: f32) -> u8 {
-    let channel = if channel <= 0.003_130_8 {
-        channel * 12.92
-    } else {
-        1.055 * channel.powf(1.0 / 2.4) - 0.055
-    };
-    (channel.clamp(0.0, 1.0) * 255.0).round() as u8
+    let alpha = u32::from(alpha);
+    u8::try_from(((u32::from(channel) * 255 + alpha / 2) / alpha).min(255)).unwrap_or(u8::MAX)
 }
 
 struct Badge {
-    paint_mask: Vec<bool>,
-    tone_mask: Vec<bool>,
-    width: usize,
+    rows: Vec<Option<(usize, usize)>>,
+    columns: Vec<Option<(usize, usize)>>,
 }
 
 impl Badge {
     fn contains(&self, x: usize, y: usize) -> bool {
-        self.paint_mask[y * self.width + x]
+        span_covers(self.rows[y], x) && span_covers(self.columns[x], y)
     }
 
     fn affects_tone(&self, x: usize, y: usize) -> bool {
-        self.tone_mask[y * self.width + x]
+        let max_x = x
+            .saturating_add(BADGE_ANALYSIS_MARGIN)
+            .min(self.columns.len() - 1);
+        let max_y = y
+            .saturating_add(BADGE_ANALYSIS_MARGIN)
+            .min(self.rows.len() - 1);
+
+        (y.saturating_sub(BADGE_ANALYSIS_MARGIN)..=max_y)
+            .any(|y| (x.saturating_sub(BADGE_ANALYSIS_MARGIN)..=max_x).any(|x| self.contains(x, y)))
     }
+}
+
+fn span_covers(span: Option<(usize, usize)>, value: usize) -> bool {
+    span.is_some_and(|(min, max)| (min..=max).contains(&value))
 }
 
 fn classify_badge(pixels: &[[u8; 4]], width: usize, height: usize) -> Option<Badge> {
     let mut clear = 0usize;
     let mut visible = 0usize;
-    let mut bounds: Option<Bounds> = None;
     let mut badge_coloured = 0usize;
     let mut rows = vec![None; height];
     let mut columns = vec![None; width];
@@ -275,10 +245,6 @@ fn classify_badge(pixels: &[[u8; 4]], width: usize, height: usize) -> Option<Bad
             badge_coloured += 1;
             let x = index % width;
             let y = index / width;
-            bounds = Some(match bounds {
-                Some(bounds) => bounds.include(x, y),
-                None => Bounds::new(x, y),
-            });
             rows[y] = Some(include_span(rows[y], x));
             columns[x] = Some(include_span(columns[x], y));
         }
@@ -289,41 +255,9 @@ fn classify_badge(pixels: &[[u8; 4]], width: usize, height: usize) -> Option<Bad
         return None;
     }
 
-    let bounds = bounds?;
-    if plausible_badge(bounds, badge_coloured, visible, width, height) {
-        let mut paint_mask = vec![false; pixels.len()];
-        for y in 0..height {
-            for x in 0..width {
-                paint_mask[y * width + x] = rows[y]
-                    .is_some_and(|(min, max)| (min..=max).contains(&x))
-                    && columns[x].is_some_and(|(min, max)| (min..=max).contains(&y));
-            }
-        }
-        let mut tone_mask = paint_mask.clone();
-        for (index, included) in paint_mask.iter().copied().enumerate() {
-            if !included {
-                continue;
-            }
-            let x = index % width;
-            let y = index / width;
-            let min_x = x.saturating_sub(BADGE_ANALYSIS_MARGIN);
-            let max_x = x.saturating_add(BADGE_ANALYSIS_MARGIN).min(width - 1);
-            let min_y = y.saturating_sub(BADGE_ANALYSIS_MARGIN);
-            let max_y = y.saturating_add(BADGE_ANALYSIS_MARGIN).min(height - 1);
-            for neighbour_y in min_y..=max_y {
-                for neighbour_x in min_x..=max_x {
-                    tone_mask[neighbour_y * width + neighbour_x] = true;
-                }
-            }
-        }
-        Some(Badge {
-            paint_mask,
-            tone_mask,
-            width,
-        })
-    } else {
-        None
-    }
+    let bounds = Bounds::of(&rows, &columns)?;
+    plausible_badge(bounds, badge_coloured, visible, width, height)
+        .then_some(Badge { rows, columns })
 }
 
 fn include_span(span: Option<(usize, usize)>, value: usize) -> (usize, usize) {
@@ -341,22 +275,22 @@ struct Bounds {
 }
 
 impl Bounds {
-    fn new(x: usize, y: usize) -> Self {
-        Self {
-            min_x: x,
-            min_y: y,
-            max_x: x,
-            max_y: y,
-        }
-    }
+    fn of(rows: &[Option<(usize, usize)>], columns: &[Option<(usize, usize)>]) -> Option<Self> {
+        let occupied = |spans: &[Option<(usize, usize)>]| {
+            Some((
+                spans.iter().position(Option::is_some)?,
+                spans.iter().rposition(Option::is_some)?,
+            ))
+        };
 
-    fn include(self, x: usize, y: usize) -> Self {
-        Self {
-            min_x: self.min_x.min(x),
-            min_y: self.min_y.min(y),
-            max_x: self.max_x.max(x),
-            max_y: self.max_y.max(y),
-        }
+        let (min_y, max_y) = occupied(rows)?;
+        let (min_x, max_x) = occupied(columns)?;
+        Some(Self {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+        })
     }
 
     fn width(self) -> usize {
@@ -427,17 +361,9 @@ fn resize(image: RgbaImage, target: u32) -> RgbaImage {
         );
         let mut bytes = resized.into_raw();
         for pixel in bytes.as_chunks_mut::<4>().0 {
-            let alpha = u16::from(pixel[3]);
-            if alpha == 0 {
-                pixel[..3].fill(0);
-            } else {
-                for channel in &mut pixel[..3] {
-                    *channel = u8::try_from(
-                        ((u32::from(*channel) * 255 + u32::from(alpha) / 2) / u32::from(alpha))
-                            .min(255),
-                    )
-                    .unwrap_or(u8::MAX);
-                }
+            let alpha = pixel[3];
+            for channel in &mut pixel[..3] {
+                *channel = straighten(*channel, alpha);
             }
         }
         bytes
@@ -545,12 +471,12 @@ mod tests {
             let light = pixels[3 * 12 + 3];
             let dark = pixels[6 * 12 + 6];
             let ink = srgb_to_oklab(theme.ink);
-            let towards_panel = (srgb_to_oklab(base).lightness - ink.lightness).signum();
+            let towards_panel = (srgb_to_oklab(base).l - ink.l).signum();
 
             assert!(luminance(light) - luminance(dark) >= 0.3);
             for shade in [light, dark] {
                 let shade = srgb_to_oklab([shade[0], shade[1], shade[2]]);
-                let travel = (shade.lightness - ink.lightness) * towards_panel;
+                let travel = (shade.l - ink.l) * towards_panel;
                 assert!(travel >= -ROUND_TRIP_SLACK);
                 assert!(travel <= MAX_TINT_SHIFT + ROUND_TRIP_SLACK);
                 assert!((shade.a - ink.a).abs() <= ROUND_TRIP_SLACK);
