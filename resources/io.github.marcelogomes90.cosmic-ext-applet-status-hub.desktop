@@ -1,12 +1,15 @@
 [Desktop Entry]
 Name=Status Hub
+Name[pl]=Centrum Statusów
 Comment=Application tray items, gathered behind a single panel button
+Comment[pl]=Elementy aplikacji na tacce, zebrane w jednym przycisku na panelu
 Type=Application
 Exec=cosmic-ext-applet-status-hub
 Icon=io.github.marcelogomes90.cosmic-ext-applet-status-hub
 Terminal=false
 Categories=COSMIC;
 Keywords=COSMIC;Applet;Tray;Indicator;Status;SNI;StatusNotifierItem;
+Keywords[pl]=COSMIC;Aplet;Tacka;Wskaźnik;Status;SNI;StatusNotifierItem;
 NoDisplay=true
 StartupNotify=true
 X-CosmicApplet=true
