@@ -20,6 +20,21 @@ pub fn load(path: &Path, size: u16) -> Option<RgbaImage> {
     })
 }
 
+pub fn may_load_lazily(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() || std::fs::File::open(path).is_err() {
+        return false;
+    }
+
+    if path.extension() == Some(OsStr::new("svg")) {
+        metadata.len() > super::svg::MAX_SVG_BYTES
+    } else {
+        metadata.len() > MAX_RASTER_BYTES
+    }
+}
+
 pub fn pixels(image: &RgbaImage) -> Option<(usize, usize, &[[u8; 4]])> {
     let width = usize::try_from(image.width).ok()?;
     let height = usize::try_from(image.height).ok()?;
@@ -168,5 +183,20 @@ mod tests {
         assert_eq!(straighten(64, 128), 128);
         assert_eq!(straighten(200, 255), 200);
         assert_eq!(straighten(255, 16), 255);
+    }
+
+    #[test]
+    fn missing_and_invalid_small_files_are_not_deferred_to_the_renderer() {
+        let root = crate::applet::icons::testing::test_root("invalid-lazy-file");
+        std::fs::create_dir_all(&root).unwrap();
+        let missing = root.join("missing.png");
+        let invalid = root.join("invalid.png");
+        std::fs::write(&invalid, b"not a png").unwrap();
+
+        assert!(!may_load_lazily(&missing));
+        assert!(load(&invalid, 24).is_none());
+        assert!(!may_load_lazily(&invalid));
+
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

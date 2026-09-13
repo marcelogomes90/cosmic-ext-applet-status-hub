@@ -7,7 +7,7 @@ use crate::core::icons::RgbaImage;
 
 use super::raster::straighten;
 
-const MAX_SVG_BYTES: u64 = 256 * 1024;
+pub(super) const MAX_SVG_BYTES: u64 = 256 * 1024;
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn render_svg(path: &Path, size: u16) -> Option<RgbaImage> {

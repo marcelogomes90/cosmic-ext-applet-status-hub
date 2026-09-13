@@ -103,7 +103,7 @@ impl IconCache {
                         let built = if kind == IconKind::Overlay {
                             build_artwork(&options, draw_size, &overlay_theme, kind)
                         } else {
-                            Some(build(&options, draw_size, theme))
+                            Some(build(&options, &item.id, draw_size, theme))
                         };
                         if let Some(built) = built {
                             tracing::info!(
@@ -189,8 +189,32 @@ enum Origin {
     Payload,
 }
 
-fn build(options: &IconOptions, size: u16, theme: &ThemeContext) -> Built {
-    build_artwork(options, size, theme, IconKind::Primary).unwrap_or_else(|| fallback(size, theme))
+fn build(options: &IconOptions, item_id: &str, size: u16, theme: &ThemeContext) -> Built {
+    build_artwork(options, size, theme, IconKind::Primary)
+        .or_else(|| fallback_to_id(item_id, options.name.as_deref(), size, theme))
+        .unwrap_or_else(|| fallback(size, theme))
+}
+
+fn fallback_to_id(
+    item_id: &str,
+    published_name: Option<&str>,
+    size: u16,
+    theme: &ThemeContext,
+) -> Option<Built> {
+    let item_id = item_id.trim();
+    if item_id.is_empty()
+        || published_name == Some(item_id)
+        || item_id.contains(['/', '\\'])
+        || matches!(item_id, "." | "..")
+    {
+        return None;
+    }
+
+    let path = lookup(item_id, size)?;
+    let source = format!("id {item_id} -> {}", path.display());
+    let mut built = from_file(path, item_id, source, size, theme, IconKind::Primary)?;
+    built.fallback = true;
+    Some(built)
 }
 
 fn build_artwork(
@@ -298,7 +322,7 @@ fn from_file(
         raster::load(&path, size).and_then(|image| prepared_handle(image, size, theme, explicit))
     {
         prepared
-    } else if kind == IconKind::Overlay {
+    } else if kind == IconKind::Overlay || !raster::may_load_lazily(&path) {
         return None;
     } else {
         let mut handle = icon::from_path(path);
@@ -800,7 +824,7 @@ mod tests {
             ..IconOptions::default()
         };
 
-        let built = build(&options, 24, &test_theme([0; 3]));
+        let built = build(&options, "", 24, &test_theme([0; 3]));
 
         assert!(built.source.starts_with("name "), "{}", built.source);
         assert!(
@@ -823,7 +847,7 @@ mod tests {
             ..IconOptions::default()
         };
 
-        let built = build(&options, 24, &test_theme([0; 3]));
+        let built = build(&options, "", 24, &test_theme([0; 3]));
 
         assert_eq!(
             built.source,
@@ -845,7 +869,7 @@ mod tests {
             ..IconOptions::default()
         };
 
-        let built = build(&options, 24, &test_theme([0; 3]));
+        let built = build(&options, "", 24, &test_theme([0; 3]));
 
         assert_eq!(built.source, format!("published path {}", path.display()));
         std::fs::remove_dir_all(root).unwrap();
@@ -858,7 +882,76 @@ mod tests {
             ..IconOptions::default()
         };
 
-        let built = build(&options, 24, &test_theme([0; 3]));
+        let built = build(&options, FALLBACKS[0], 24, &test_theme([0; 3]));
+
+        assert!(built.source.starts_with("pixmap "), "{}", built.source);
+        assert!(!built.fallback);
+    }
+
+    #[test]
+    fn an_invalid_published_file_gives_way_to_the_pixmap() {
+        let root = test_root("invalid-primary");
+        let broken = svg_at(&root, "broken", "not an svg");
+        let options = IconOptions {
+            path: Some(broken.to_string_lossy().into_owned()),
+            pixels: Some(std::sync::Arc::new(pixmap(24, |_, _| [10, 20, 30, 255]))),
+            ..IconOptions::default()
+        };
+
+        let built = build(&options, FALLBACKS[0], 24, &test_theme([0; 3]));
+
+        assert!(built.source.starts_with("pixmap "), "{}", built.source);
+        assert!(!built.fallback);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn the_item_id_is_tried_before_the_generic_fallback() {
+        let Some(themed) = FALLBACKS
+            .iter()
+            .copied()
+            .find(|name| lookup(name, 24).is_some())
+        else {
+            return;
+        };
+
+        let built = build(&IconOptions::default(), themed, 24, &test_theme([0; 3]));
+
+        assert!(built.source.starts_with(&format!("id {themed} ->")));
+        assert!(
+            built.fallback,
+            "an inferred icon must keep retrying published artwork"
+        );
+    }
+
+    #[test]
+    fn an_unknown_or_unsafe_item_id_uses_the_generic_fallback() {
+        for item_id in [
+            format!("status-hub-unknown-id-{}", std::process::id()),
+            "../application-default".to_owned(),
+        ] {
+            let built = build(&IconOptions::default(), &item_id, 24, &test_theme([0; 3]));
+
+            assert!(built.source.starts_with("GENERIC "), "{}", built.source);
+            assert!(built.fallback);
+        }
+    }
+
+    #[test]
+    fn a_published_icon_keeps_priority_over_the_item_id() {
+        let Some(themed) = FALLBACKS
+            .iter()
+            .copied()
+            .find(|name| lookup(name, 24).is_some())
+        else {
+            return;
+        };
+        let options = IconOptions {
+            pixels: Some(std::sync::Arc::new(pixmap(24, |_, _| [10, 20, 30, 255]))),
+            ..IconOptions::default()
+        };
+
+        let built = build(&options, themed, 24, &test_theme([0; 3]));
 
         assert!(built.source.starts_with("pixmap "), "{}", built.source);
         assert!(!built.fallback);
@@ -962,7 +1055,7 @@ mod tests {
             ..IconOptions::default()
         };
 
-        let built = build(&options, 10, &original_icons());
+        let built = build(&options, "", 10, &original_icons());
 
         assert_eq!(built.paint, "original-disabled");
         assert!(!built.handle.symbolic);
