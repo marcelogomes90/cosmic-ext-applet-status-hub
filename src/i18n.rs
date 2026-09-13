@@ -65,6 +65,7 @@ mod tests {
     #[test]
     fn every_language_translates_exactly_the_same_messages() {
         for (language, catalogue) in [
+            ("cs", include_str!("../i18n/cs/status-hub.ftl")),
             ("de", include_str!("../i18n/de/status-hub.ftl")),
             ("es", include_str!("../i18n/es/status-hub.ftl")),
             ("fr", include_str!("../i18n/fr/status-hub.ftl")),

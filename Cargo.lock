@@ -931,7 +931,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-ext-applet-status-hub"
-version = "1.5.7"
+version = "1.5.8"
 dependencies = [
  "cosmic-ext-applet-status-hub",
  "cosmic-freedesktop-icons",

@@ -352,7 +352,16 @@
     <keyword xml:lang="zh-CN">面板</keyword>
   </keywords>
   <releases>
-  <release type="stable" version="1.5.7" date="2026-09-13">
+    <release type="stable" version="1.5.8" date="2026-09-13">
+      <description>
+        <p>This patch adds Czech to the languages Status Hub speaks.</p>
+        <ul>
+          <li>Adds the Czech applet translation and localizes the desktop entry and AppStream metadata in Czech.</li>
+          <li>Keeps the Czech catalogue covered by the translation parity test.</li>
+        </ul>
+      </description>
+    </release>
+    <release type="stable" version="1.5.7" date="2026-09-13">
       <description>
         <p>This patch improves icon recovery and theme loading while completing translated application metadata.</p>
         <ul>
