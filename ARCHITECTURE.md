@@ -374,7 +374,16 @@ is `<installation>/exports/share/icons`, where applications publish the icons th
 it, which is what keeps the free host themes in the search path. Each entry there is a symlink into
 `<installation>/app/<id>/current/active/export`, so the app tree is granted alongside them or every
 link dangles. `~/.icons` is granted because that legacy path is a real search root nothing else
-covers. The only writable grant is this applet's own COSMIC configuration directory.
+covers.
+
+`~/.config/cosmic` is the one read-write grant, and it has to be. `cosmic_config::Config::new`
+calls `create_dir_all` on `<id>/v<n>` before it reads a single key, so under a read-only view a
+directory the host has not created yet is a hard error — and libcosmic answers that by falling back
+to its built-in theme, silently, without a log line. A host whose COSMIC predates the theme config's
+`v1` → `v2` bump never creates `com.system76.CosmicTheme.Dark/v2`, so the applet would render with
+stock colours and corner radii while every other application looked right. The `dbus-config` feature
+does not change this: the settings daemon carries change notifications, the values themselves are
+read off the filesystem. Every other COSMIC Flatpak grants this directory read-write.
 
 Two rules keep the offline build working:
 
