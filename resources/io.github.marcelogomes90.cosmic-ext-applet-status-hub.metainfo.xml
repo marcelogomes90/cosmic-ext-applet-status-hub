@@ -327,6 +327,17 @@
     <keyword xml:lang="zh-CN">面板</keyword>
   </keywords>
   <releases>
+  <release type="stable" version="1.5.7" date="2026-09-13">
+      <description>
+        <p>This patch improves icon recovery and theme loading while completing translated application metadata.</p>
+        <ul>
+          <li>Falls back to a tray item's application identifier when its published icon is missing or invalid, before using the generic icon.</li>
+          <li>Lets the Flatpak create COSMIC's versioned configuration directories so it reliably loads the host theme.</li>
+          <li>Adds the Polish applet translation and localizes the desktop entry and AppStream metadata in every supported language.</li>
+          <li>Keeps the Polish catalogue covered by the translation parity test.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.5.6" date="2026-09-10">
       <description>
         <p>This maintenance release keeps Status Hub aligned with COSMIC Epoch 1.8 and the latest libcosmic APIs.</p>
