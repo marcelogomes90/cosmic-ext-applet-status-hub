@@ -8,59 +8,203 @@
     <name>marcelogomes90</name>
   </developer>
   <name>Status Hub</name>
+  <name xml:lang="de">Statuszentrale</name>
+  <name xml:lang="es">Centro de estado</name>
+  <name xml:lang="fr">Centre d’état</name>
+  <name xml:lang="it">Centro di stato</name>
+  <name xml:lang="nl">Statushub</name>
   <name xml:lang="pl">Centrum Statusów</name>
+  <name xml:lang="pt-BR">Status Hub</name>
+  <name xml:lang="ru">Центр состояния</name>
+  <name xml:lang="uk">Центр стану</name>
+  <name xml:lang="zh-CN">状态中心</name>
   <summary>Application tray items, gathered behind a single panel button</summary>
-  <summary xml:lang="pl">Aplikacje na tacce, zebrane w jednym przycisku na panelu</summary>
+  <summary xml:lang="de">Elemente des Anwendungsinfobereichs, gebündelt hinter einer einzigen Panel-Schaltfläche</summary>
+  <summary xml:lang="es">Elementos de la bandeja de aplicaciones, reunidos tras un único botón del panel</summary>
+  <summary xml:lang="fr">Éléments de la zone de notification regroupés derrière un seul bouton du panneau</summary>
+  <summary xml:lang="it">Elementi dell’area di notifica delle applicazioni, raccolti dietro un unico pulsante del pannello</summary>
+  <summary xml:lang="nl">Systeemvakitems van toepassingen, gebundeld achter één paneelknop</summary>
+  <summary xml:lang="pl">Elementy zasobnika aplikacji zebrane pod jednym przyciskiem panelu</summary>
+  <summary xml:lang="pt-BR">Itens da bandeja de aplicativos, reunidos em um único botão do painel</summary>
+  <summary xml:lang="ru">Элементы области уведомлений приложений, собранные под одной кнопкой панели</summary>
+  <summary xml:lang="uk">Елементи області сповіщень застосунків, зібрані під однією кнопкою панелі</summary>
+  <summary xml:lang="zh-CN">应用托盘项，集中在一个面板按钮中</summary>
   <description>
     <p>Status Hub is a StatusNotifierItem tray for the COSMIC desktop. It adds a hub button to the panel; clicking it opens a compact popup holding the tray items and wraps them onto additional rows when there are many. Items reached for often can be pinned beside the hub so they stay one click away. A popup item's menu stays in the same card behind a divider, while a pinned item's menu is anchored to its panel slot.</p>
-    <p xml:lang="pl">Centum Statusów jest tacką StatusNotifierItem dla środowiska COSMIC. Dodaje przycisk centrum statusów na panelu; kliknięcie go otwiera wyskakujące okno w którym są elementy na tackę i uszeregowywuje je, jeśli jest ich odpowiednio dużo. Elementy często używane mogą być przypięte jednym klinięciem. Menu tych elementów w wyskakującym oknie zostaje w separatorze, a menu przypiętych elementów jest otwierane w dedykowanym miejscu w panelu.</p>
+    <p xml:lang="de">Die Statuszentrale ist ein StatusNotifierItem-Infobereich für den COSMIC-Desktop. Sie fügt dem Panel eine zentrale Schaltfläche hinzu; ein Klick darauf öffnet ein kompaktes Pop-up mit den Elementen des Infobereichs, die bei größerer Anzahl auf weitere Zeilen umgebrochen werden. Häufig verwendete Elemente können neben der Statuszentrale angeheftet werden, damit sie mit einem Klick erreichbar bleiben. Das Menü eines Elements im Pop-up bleibt, durch eine Trennlinie abgesetzt, in derselben Karte, während das Menü eines angehefteten Elements an seinem Platz im Panel verankert ist.</p>
+    <p xml:lang="es">Centro de estado es una bandeja StatusNotifierItem para el escritorio COSMIC. Añade un botón central al panel; al pulsarlo se abre una ventana emergente compacta con los elementos de la bandeja, que se distribuyen en filas adicionales cuando son numerosos. Los elementos de uso frecuente se pueden fijar junto al centro para mantenerlos a un solo clic. El menú de un elemento de la ventana emergente permanece en la misma tarjeta tras un separador, mientras que el menú de un elemento fijado queda anclado a su posición en el panel.</p>
+    <p xml:lang="fr">Centre d’état est une zone de notification StatusNotifierItem pour le bureau COSMIC. Il ajoute un bouton central au panneau ; un clic ouvre une fenêtre compacte contenant les éléments de la zone de notification, répartis sur des lignes supplémentaires lorsqu’ils sont nombreux. Les éléments fréquemment utilisés peuvent être épinglés à côté du centre afin de rester accessibles en un clic. Le menu d’un élément de la fenêtre reste dans la même carte derrière un séparateur, tandis que celui d’un élément épinglé est ancré à son emplacement dans le panneau.</p>
+    <p xml:lang="it">Centro di stato è un’area di notifica StatusNotifierItem per il desktop COSMIC. Aggiunge al pannello un pulsante centrale; facendovi clic si apre una finestra compatta che contiene gli elementi dell’area di notifica e li dispone su righe aggiuntive quando sono numerosi. Gli elementi usati più spesso possono essere fissati accanto al centro per rimanere a portata di clic. Il menu di un elemento nella finestra resta nella stessa scheda dietro un separatore, mentre il menu di un elemento fissato è ancorato alla sua posizione nel pannello.</p>
+    <p xml:lang="nl">Statushub is een StatusNotifierItem-systeemvak voor het COSMIC-bureaublad. Het voegt een centrale knop toe aan het paneel; een klik opent een compacte pop-up met de systeemvakitems, die bij grote aantallen over extra rijen worden verdeeld. Veelgebruikte items kunnen naast de hub worden vastgemaakt, zodat ze met één klik bereikbaar blijven. Het menu van een item in de pop-up blijft achter een scheidingslijn op dezelfde kaart, terwijl het menu van een vastgemaakt item aan zijn plek op het paneel is verankerd.</p>
+    <p xml:lang="pl">Centrum Statusów to zasobnik StatusNotifierItem dla pulpitu COSMIC. Dodaje do panelu przycisk centrum; jego kliknięcie otwiera kompaktowe okno podręczne zawierające elementy zasobnika, które przy większej liczbie są rozmieszczane w kolejnych wierszach. Często używane elementy można przypiąć obok centrum, aby pozostawały dostępne jednym kliknięciem. Menu elementu w oknie podręcznym pozostaje na tej samej karcie, oddzielone separatorem, natomiast menu przypiętego elementu jest zakotwiczone w jego miejscu na panelu.</p>
+    <p xml:lang="pt-BR">O Status Hub é uma bandeja StatusNotifierItem para o ambiente COSMIC. Ele adiciona um botão central ao painel; ao clicar nele, uma janela compacta é aberta com os itens da bandeja, distribuindo-os em linhas adicionais quando há muitos. Itens usados com frequência podem ser fixados ao lado do hub para permanecerem a um clique de distância. O menu de um item da janela permanece no mesmo cartão, atrás de um divisor, enquanto o menu de um item fixado fica ancorado à posição dele no painel.</p>
+    <p xml:lang="ru">Центр состояния — это область уведомлений StatusNotifierItem для рабочего стола COSMIC. Он добавляет на панель общую кнопку; нажатие открывает компактное всплывающее окно с элементами области уведомлений, которые при большом количестве переносятся на дополнительные строки. Часто используемые элементы можно закрепить рядом с центром, чтобы они оставались доступными одним нажатием. Меню элемента во всплывающем окне остаётся на той же карточке за разделителем, а меню закреплённого элемента привязано к его месту на панели.</p>
+    <p xml:lang="uk">Центр стану — це область сповіщень StatusNotifierItem для стільниці COSMIC. Він додає на панель спільну кнопку; натискання відкриває компактне спливне вікно з елементами області сповіщень, які за великої кількості переносяться на додаткові рядки. Часто використовувані елементи можна закріпити поруч із центром, щоб вони залишалися доступними одним натисканням. Меню елемента у спливному вікні залишається на тій самій картці за роздільником, а меню закріпленого елемента прив’язане до його місця на панелі.</p>
+    <p xml:lang="zh-CN">状态中心是 COSMIC 桌面的 StatusNotifierItem 托盘。它会在面板中添加一个中心按钮；点击后将打开一个紧凑的弹出窗口来容纳托盘项，并在项目较多时将其排列到更多行中。常用项目可以固定在中心按钮旁边，确保单击即可访问。弹出窗口中项目的菜单会保留在同一卡片内并位于分隔线之后，而固定项目的菜单则锚定在其面板位置上。</p>
     <p>It is an independent implementation written from the StatusNotifierItem and DBusMenu specifications. It is not a fork of COSMIC's Status Area, and it is built to run alongside it.</p>
-    <p xml:lang="pl">Jest to niezależna implementacja napisana na podstawie specyfikacji StatusNotifierItem i DBusMenua. Nie jest to fork Status Area z COSMIC, i jest zbudowany by go uzupełniać.</p>
+    <p xml:lang="de">Sie ist eine unabhängige Implementierung auf Grundlage der Spezifikationen von StatusNotifierItem und DBusMenu. Sie ist keine Abspaltung des COSMIC-Statusbereichs und dafür ausgelegt, parallel zu ihm zu laufen.</p>
+    <p xml:lang="es">Es una implementación independiente escrita a partir de las especificaciones de StatusNotifierItem y DBusMenu. No es una bifurcación del Área de estado de COSMIC y está diseñada para funcionar junto a ella.</p>
+    <p xml:lang="fr">Il s’agit d’une implémentation indépendante fondée sur les spécifications StatusNotifierItem et DBusMenu. Ce n’est pas une bifurcation de la Zone d’état de COSMIC et elle est conçue pour fonctionner à ses côtés.</p>
+    <p xml:lang="it">È un’implementazione indipendente basata sulle specifiche StatusNotifierItem e DBusMenu. Non è una derivazione dell’Area di stato di COSMIC ed è progettata per funzionare al suo fianco.</p>
+    <p xml:lang="nl">Het is een onafhankelijke implementatie op basis van de StatusNotifierItem- en DBusMenu-specificaties. Het is geen afsplitsing van COSMIC's Statusgebied en is ontworpen om ernaast te werken.</p>
+    <p xml:lang="pl">Jest to niezależna implementacja napisana zgodnie ze specyfikacjami StatusNotifierItem i DBusMenu. Nie jest odgałęzieniem Obszaru stanu COSMIC i została zaprojektowana do działania obok niego.</p>
+    <p xml:lang="pt-BR">É uma implementação independente baseada nas especificações StatusNotifierItem e DBusMenu. Não é uma derivação da Área de status do COSMIC e foi criada para funcionar ao lado dela.</p>
+    <p xml:lang="ru">Это независимая реализация, созданная на основе спецификаций StatusNotifierItem и DBusMenu. Она не является ответвлением Области состояния COSMIC и предназначена для совместной работы с ней.</p>
+    <p xml:lang="uk">Це незалежна реалізація, створена на основі специфікацій StatusNotifierItem і DBusMenu. Вона не є відгалуженням Області стану COSMIC і призначена для роботи поруч із нею.</p>
+    <p xml:lang="zh-CN">这是依据 StatusNotifierItem 和 DBusMenu 规范编写的独立实现。它并非 COSMIC 状态区域的分支，而是为与其同时运行而构建。</p>
     <p>The tray is the part of a desktop most exposed to badly behaved applications: they hang, they exit without warning, they answer with the wrong types, and they restart under a new bus name a millisecond after the old one vanished. Status Hub is organised around not letting any of that become your problem:</p>
-    <p xml:lang="pl">Tacka jest częścią pulpitu najbardziej narażoną na źle zachowujące się aplikacje: zawieszają się, zamykają bez ostrzeżenia, odpowiadają ze złym typem i restartują się w nowej szynie milisekundy po zniknięciu starych. Centum Statusów jest stworzony po to, by nie był to Twój problem:</p>
+    <p xml:lang="de">Der Infobereich ist der Teil eines Desktops, der fehlerhaften Anwendungen am stärksten ausgesetzt ist: Sie hängen sich auf, beenden sich ohne Warnung, antworten mit falschen Typen und starten eine Millisekunde nach dem Verschwinden des alten Namens unter einem neuen Bus-Namen neu. Die Statuszentrale ist so aufgebaut, dass nichts davon zu Ihrem Problem wird:</p>
+    <p xml:lang="es">La bandeja es la parte del escritorio más expuesta a aplicaciones con un comportamiento deficiente: se bloquean, se cierran sin avisar, responden con tipos incorrectos y se reinician con un nuevo nombre de bus un milisegundo después de desaparecer el anterior. Centro de estado está organizado para evitar que todo ello se convierta en un problema para usted:</p>
+    <p xml:lang="fr">La zone de notification est la partie du bureau la plus exposée aux applications qui se comportent mal : elles se bloquent, se ferment sans prévenir, répondent avec des types incorrects et redémarrent sous un nouveau nom de bus une milliseconde après la disparition de l’ancien. Centre d’état est conçu pour que rien de tout cela ne devienne votre problème :</p>
+    <p xml:lang="it">L’area di notifica è la parte del desktop più esposta alle applicazioni che si comportano male: si bloccano, si chiudono senza preavviso, rispondono con tipi errati e si riavviano con un nuovo nome del bus un millisecondo dopo la scomparsa del precedente. Centro di stato è organizzato affinché niente di tutto ciò diventi un problema per l’utente:</p>
+    <p xml:lang="nl">Het systeemvak is het deel van een bureaublad dat het meest wordt blootgesteld aan toepassingen die zich misdragen: ze lopen vast, sluiten onverwacht af, antwoorden met verkeerde typen en starten opnieuw onder een nieuwe busnaam, een milliseconde nadat de oude is verdwenen. Statushub is zo opgezet dat dit allemaal niet uw probleem wordt:</p>
+    <p xml:lang="pl">Zasobnik jest częścią pulpitu najbardziej narażoną na niewłaściwie działające aplikacje: zawieszają się, kończą pracę bez ostrzeżenia, zwracają wartości niewłaściwych typów i uruchamiają się ponownie pod nową nazwą magistrali milisekundę po zniknięciu starej. Centrum Statusów zaprojektowano tak, aby żadne z tych zachowań nie było problemem użytkownika:</p>
+    <p xml:lang="pt-BR">A bandeja é a parte da área de trabalho mais exposta a aplicativos que se comportam mal: eles travam, encerram sem aviso, respondem com tipos incorretos e reiniciam com um novo nome no barramento um milissegundo depois que o antigo desaparece. O Status Hub é estruturado para impedir que qualquer uma dessas situações se torne um problema para você:</p>
+    <p xml:lang="ru">Область уведомлений — часть рабочего стола, наиболее подверженная влиянию некорректно работающих приложений: они зависают, завершаются без предупреждения, отвечают данными неверных типов и перезапускаются с новым именем в шине через миллисекунду после исчезновения старого. Центр состояния устроен так, чтобы всё это не становилось вашей проблемой:</p>
+    <p xml:lang="uk">Область сповіщень — частина стільниці, найбільш вразлива до некоректної роботи застосунків: вони зависають, завершуються без попередження, відповідають даними неправильних типів і перезапускаються з новим ім’ям у шині за мілісекунду після зникнення старого. Центр стану влаштовано так, щоб усе це не ставало вашою проблемою:</p>
+    <p xml:lang="zh-CN">托盘是桌面中最容易受到行为异常应用影响的部分：这些应用可能会卡死、在没有警告的情况下退出、返回错误的类型，或在旧总线名称消失一毫秒后使用新名称重启。状态中心的设计可以避免让这些问题影响您：</p>
     <ul>
       <li>An item exists exactly as long as its bus owner exists, so no leftover icons are stranded when an application exits without unregistering.</li>
-      <li xml:lang="pl">Element trwa dokładnie tyle ile szyna właściciela, więc ubijane są ikony, których aplikacje kończą bez ostrzeżenia.</li>
+      <li xml:lang="de">Ein Element besteht genau so lange wie sein Besitzer auf dem Bus, sodass keine verwaisten Symbole zurückbleiben, wenn eine Anwendung beendet wird, ohne sich abzumelden.</li>
+      <li xml:lang="es">Un elemento existe exactamente mientras exista su propietario en el bus, por lo que no quedan iconos huérfanos cuando una aplicación se cierra sin anular su registro.</li>
+      <li xml:lang="fr">Un élément existe exactement aussi longtemps que son propriétaire sur le bus ; aucune icône orpheline ne subsiste donc lorsqu’une application se ferme sans se désinscrire.</li>
+      <li xml:lang="it">Un elemento esiste esattamente finché esiste il suo proprietario sul bus, quindi non restano icone orfane quando un’applicazione si chiude senza annullare la registrazione.</li>
+      <li xml:lang="nl">Een item bestaat precies zolang als zijn eigenaar op de bus bestaat, zodat er geen achtergebleven pictogrammen zijn wanneer een toepassing afsluit zonder zich af te melden.</li>
+      <li xml:lang="pl">Element istnieje dokładnie tak długo, jak jego właściciel na magistrali, dzięki czemu po zakończeniu aplikacji bez wyrejestrowania nie pozostają osierocone ikony.</li>
+      <li xml:lang="pt-BR">Um item existe exatamente enquanto seu proprietário existe no barramento, portanto nenhum ícone órfão permanece quando um aplicativo encerra sem cancelar o registro.</li>
+      <li xml:lang="ru">Элемент существует ровно столько, сколько существует его владелец в шине, поэтому после завершения приложения без отмены регистрации не остаётся потерянных значков.</li>
+      <li xml:lang="uk">Елемент існує рівно стільки, скільки існує його власник у шині, тому після завершення застосунку без скасування реєстрації не залишається покинутих піктограм.</li>
+      <li xml:lang="zh-CN">项目仅在其总线所有者存在期间存在，因此应用退出而未注销时不会留下孤立图标。</li>
       <li>Every remote call has a timeout and every item has its own error budget, so one wedged application cannot delay another, or the popup, or the panel.</li>
-      <li xml:lang="pl">Każde zdalne zawołanie jest ograniczane czasowo i ma swój budżet błędów, więc jedna aplikacja nie może opóźniać innej, wyskakującego okna czy panelu.</li>
+      <li xml:lang="de">Jeder entfernte Aufruf hat eine Zeitüberschreitung und jedes Element sein eigenes Fehlerbudget, sodass eine festgefahrene Anwendung weder eine andere noch das Pop-up oder das Panel verzögern kann.</li>
+      <li xml:lang="es">Todas las llamadas remotas tienen un tiempo de espera y cada elemento cuenta con su propio margen de errores, de modo que una aplicación bloqueada no puede retrasar a otra, ni a la ventana emergente ni al panel.</li>
+      <li xml:lang="fr">Chaque appel distant possède un délai d’expiration et chaque élément son propre budget d’erreurs ; une application bloquée ne peut donc ralentir ni une autre application, ni la fenêtre, ni le panneau.</li>
+      <li xml:lang="it">Ogni chiamata remota ha un tempo limite e ogni elemento dispone del proprio margine di errore, quindi un’applicazione bloccata non può rallentarne un’altra, né la finestra né il pannello.</li>
+      <li xml:lang="nl">Elke externe aanroep heeft een time-out en elk item heeft een eigen foutmarge, zodat één vastgelopen toepassing geen andere toepassing, de pop-up of het paneel kan vertragen.</li>
+      <li xml:lang="pl">Każde zdalne wywołanie ma limit czasu, a każdy element własny limit błędów, dzięki czemu jedna zablokowana aplikacja nie może opóźnić innej aplikacji, okna podręcznego ani panelu.</li>
+      <li xml:lang="pt-BR">Toda chamada remota tem um tempo limite e cada item possui sua própria margem de erros, portanto um aplicativo travado não pode atrasar outro, nem a janela nem o painel.</li>
+      <li xml:lang="ru">У каждого удалённого вызова есть тайм-аут, а у каждого элемента — собственный запас допустимых ошибок, поэтому одно зависшее приложение не может задержать другое, всплывающее окно или панель.</li>
+      <li xml:lang="uk">Кожен віддалений виклик має час очікування, а кожен елемент — власний запас припустимих помилок, тому один завислий застосунок не може затримати інший, спливне вікно або панель.</li>
+      <li xml:lang="zh-CN">每次远程调用都有超时限制，每个项目也有各自的错误额度，因此一个卡死的应用不会拖延其他应用、弹出窗口或面板。</li>
       <li>Every asynchronous reply carries a generation token, so a reply belonging to a process that has already exited can never update its successor.</li>
-      <li xml:lang="pl">Każda asynchroniczna odpowiedź przenosi token swojego stworzenia, więc odpowiedź należąca do procesu, który został zakończony nigdy nie zaktualizuje statusu jej następcy.</li>
+      <li xml:lang="de">Jede asynchrone Antwort trägt ein Generationstoken, sodass eine Antwort eines bereits beendeten Prozesses niemals dessen Nachfolger aktualisieren kann.</li>
+      <li xml:lang="es">Cada respuesta asíncrona incluye un identificador de generación, por lo que una respuesta perteneciente a un proceso que ya terminó nunca puede actualizar a su sucesor.</li>
+      <li xml:lang="fr">Chaque réponse asynchrone contient un jeton de génération ; une réponse appartenant à un processus déjà terminé ne peut donc jamais mettre à jour son successeur.</li>
+      <li xml:lang="it">Ogni risposta asincrona contiene un token di generazione, quindi una risposta appartenente a un processo già terminato non può mai aggiornare il suo successore.</li>
+      <li xml:lang="nl">Elk asynchroon antwoord bevat een generatietoken, zodat een antwoord van een al afgesloten proces nooit zijn opvolger kan bijwerken.</li>
+      <li xml:lang="pl">Każda odpowiedź asynchroniczna zawiera token generacji, dzięki czemu odpowiedź należąca do zakończonego już procesu nigdy nie zaktualizuje jego następcy.</li>
+      <li xml:lang="pt-BR">Toda resposta assíncrona carrega um token de geração, portanto uma resposta pertencente a um processo já encerrado nunca pode atualizar seu sucessor.</li>
+      <li xml:lang="ru">Каждый асинхронный ответ содержит токен поколения, поэтому ответ от уже завершившегося процесса никогда не сможет обновить его преемника.</li>
+      <li xml:lang="uk">Кожна асинхронна відповідь містить токен покоління, тому відповідь від уже завершеного процесу ніколи не зможе оновити його наступника.</li>
+      <li xml:lang="zh-CN">每个异步回复都带有代次令牌，因此已退出进程的回复绝不会更新其后继进程。</li>
       <li>Ordering is a pure function of discovery order and a small remembered list, never of the order in which replies happened to arrive, so every panel shows the same order.</li>
-      <li xml:lang="pl">Kolejność jest czystą funkcją kolejności odkrywania i dodatkowo małą lista zapamiętanych, nigdy kolejnością w której odpowiedzi przybyły, więc każdy panel ma stałą kolejność.</li>
+      <li xml:lang="de">Die Sortierung ist ausschließlich eine Funktion der Erkennungsreihenfolge und einer kleinen gespeicherten Liste, niemals der zufälligen Ankunftsreihenfolge von Antworten, sodass jedes Panel dieselbe Reihenfolge zeigt.</li>
+      <li xml:lang="es">El orden depende únicamente del orden de detección y de una pequeña lista recordada, nunca del orden en que lleguen las respuestas, por lo que todos los paneles muestran el mismo orden.</li>
+      <li xml:lang="fr">L’ordre dépend uniquement de l’ordre de découverte et d’une courte liste mémorisée, jamais de l’ordre d’arrivée des réponses ; tous les panneaux affichent ainsi le même ordre.</li>
+      <li xml:lang="it">L’ordinamento dipende unicamente dall’ordine di rilevamento e da un piccolo elenco memorizzato, mai dall’ordine in cui arrivano le risposte, così ogni pannello mostra lo stesso ordine.</li>
+      <li xml:lang="nl">De volgorde is uitsluitend een functie van de ontdekkingsvolgorde en een kleine onthouden lijst, nooit van de volgorde waarin antwoorden toevallig binnenkomen, zodat elk paneel dezelfde volgorde toont.</li>
+      <li xml:lang="pl">Kolejność zależy wyłącznie od kolejności wykrywania i niewielkiej zapamiętanej listy, nigdy od kolejności nadejścia odpowiedzi, dzięki czemu każdy panel wyświetla ten sam układ.</li>
+      <li xml:lang="pt-BR">A ordenação depende exclusivamente da ordem de descoberta e de uma pequena lista memorizada, nunca da ordem em que as respostas chegam, portanto todos os painéis exibem a mesma ordem.</li>
+      <li xml:lang="ru">Порядок зависит только от очерёдности обнаружения и небольшого сохранённого списка, но никогда — от порядка поступления ответов, поэтому на каждой панели сохраняется одинаковый порядок.</li>
+      <li xml:lang="uk">Порядок залежить лише від черговості виявлення та невеликого збереженого списку, але ніколи — від порядку надходження відповідей, тому на кожній панелі зберігається однаковий порядок.</li>
+      <li xml:lang="zh-CN">排序仅取决于发现顺序和一份简短的记忆列表，而绝不取决于回复的到达顺序，因此每个面板都会显示相同的顺序。</li>
       <li>The applet dies with the panel and is relaunched by it, rebuilding its entire state on every start, so restarting the panel never requires restarting a tray application.</li>
-      <li xml:lang="pl">Aplet jest zamykany razem z panelem i uruchamiany razem z nim, budowany od nowa przy każdym starcioe, więc restart panelu nigdy nie wymaga ponownego uruchomienia tacki aplikacji.</li>
+      <li xml:lang="de">Das Applet wird zusammen mit dem Panel beendet und von ihm neu gestartet, wobei es bei jedem Start seinen gesamten Zustand neu aufbaut. Daher erfordert ein Neustart des Panels niemals den Neustart einer Anwendung im Infobereich.</li>
+      <li xml:lang="es">El applet se cierra con el panel y este vuelve a iniciarlo, reconstruyendo todo su estado en cada arranque, por lo que reiniciar el panel nunca exige reiniciar una aplicación de la bandeja.</li>
+      <li xml:lang="fr">L’applet se ferme avec le panneau, qui le relance en reconstruisant tout son état à chaque démarrage ; redémarrer le panneau n’impose donc jamais de redémarrer une application de la zone de notification.</li>
+      <li xml:lang="it">L’applet si chiude con il pannello e viene riavviata da quest’ultimo, ricostruendo l’intero stato a ogni avvio, quindi il riavvio del pannello non richiede mai quello di un’applicazione dell’area di notifica.</li>
+      <li xml:lang="nl">De applet sluit samen met het paneel af en wordt er opnieuw door gestart, waarbij bij elke start de volledige toestand opnieuw wordt opgebouwd. Daardoor hoeft een systeemvaktoepassing nooit opnieuw te worden gestart wanneer het paneel herstart.</li>
+      <li xml:lang="pl">Aplet kończy działanie wraz z panelem i jest przez niego uruchamiany ponownie, odbudowując cały swój stan przy każdym starcie, dzięki czemu ponowne uruchomienie panelu nigdy nie wymaga ponownego uruchomienia aplikacji zasobnika.</li>
+      <li xml:lang="pt-BR">O applet encerra com o painel e é reiniciado por ele, reconstruindo todo o seu estado a cada inicialização; assim, reiniciar o painel nunca exige reiniciar um aplicativo da bandeja.</li>
+      <li xml:lang="ru">Апплет завершается вместе с панелью и запускается ею снова, при каждом запуске полностью восстанавливая своё состояние, поэтому перезапуск панели никогда не требует перезапуска приложения из области уведомлений.</li>
+      <li xml:lang="uk">Аплет завершується разом із панеллю та запускається нею знову, щоразу повністю відновлюючи свій стан, тому перезапуск панелі ніколи не потребує перезапуску застосунку з області сповіщень.</li>
+      <li xml:lang="zh-CN">小程序会随面板一同退出并由面板重新启动，每次启动时都会重建其全部状态，因此重启面板绝不需要重启托盘应用。</li>
     </ul>
   </description>
   <screenshots>
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/tray-popup.png</image>
       <caption>Tray items gathered in the popup, under a header that is always there</caption>
-      <caption xml:lang="pl">Elementy na tacce w wyskakującym oknie, pod sekcją która jest tam zawsze</caption>
+      <caption xml:lang="de">Elemente des Infobereichs im Pop-up unter einer stets sichtbaren Kopfzeile</caption>
+      <caption xml:lang="es">Elementos de la bandeja reunidos en la ventana emergente, bajo un encabezado siempre visible</caption>
+      <caption xml:lang="fr">Éléments de la zone de notification regroupés dans la fenêtre, sous un en-tête toujours visible</caption>
+      <caption xml:lang="it">Elementi dell’area di notifica raccolti nella finestra, sotto un’intestazione sempre visibile</caption>
+      <caption xml:lang="nl">Systeemvakitems verzameld in de pop-up, onder een kop die altijd zichtbaar is</caption>
+      <caption xml:lang="pl">Elementy zasobnika zebrane w oknie podręcznym pod zawsze widocznym nagłówkiem</caption>
+      <caption xml:lang="pt-BR">Itens da bandeja reunidos na janela, sob um cabeçalho sempre visível</caption>
+      <caption xml:lang="ru">Элементы области уведомлений во всплывающем окне под всегда видимым заголовком</caption>
+      <caption xml:lang="uk">Елементи області сповіщень у спливному вікні під завжди видимим заголовком</caption>
+      <caption xml:lang="zh-CN">托盘项集中在弹出窗口中，位于始终显示的标题下方</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu.png</image>
       <caption>An application's tray menu, opened from the popup</caption>
-      <caption xml:lang="pl">Menu tacki aplikacji, otworzone z wyskakującego okna</caption>
+      <caption xml:lang="de">Das aus dem Pop-up geöffnete Infobereichsmenü einer Anwendung</caption>
+      <caption xml:lang="es">Menú de bandeja de una aplicación, abierto desde la ventana emergente</caption>
+      <caption xml:lang="fr">Menu de zone de notification d’une application, ouvert depuis la fenêtre</caption>
+      <caption xml:lang="it">Menu dell’area di notifica di un’applicazione, aperto dalla finestra</caption>
+      <caption xml:lang="nl">Het systeemvakmenu van een toepassing, geopend vanuit de pop-up</caption>
+      <caption xml:lang="pl">Menu zasobnika aplikacji otwarte z okna podręcznego</caption>
+      <caption xml:lang="pt-BR">Menu de bandeja de um aplicativo, aberto pela janela</caption>
+      <caption xml:lang="ru">Меню приложения в области уведомлений, открытое из всплывающего окна</caption>
+      <caption xml:lang="uk">Меню застосунку в області сповіщень, відкрите зі спливного вікна</caption>
+      <caption xml:lang="zh-CN">从弹出窗口打开的应用托盘菜单</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-rounded.png</image>
       <caption>An application's tray menu under a rounded COSMIC theme</caption>
-      <caption xml:lang="pl">Menu tacki aplikacji w zaokrąglonym motywie COSMIC</caption>
+      <caption xml:lang="de">Das Infobereichsmenü einer Anwendung unter einem abgerundeten COSMIC-Design</caption>
+      <caption xml:lang="es">Menú de bandeja de una aplicación con un tema redondeado de COSMIC</caption>
+      <caption xml:lang="fr">Menu de zone de notification d’une application avec un thème COSMIC arrondi</caption>
+      <caption xml:lang="it">Menu dell’area di notifica di un’applicazione con un tema COSMIC arrotondato</caption>
+      <caption xml:lang="nl">Het systeemvakmenu van een toepassing met een afgerond COSMIC-thema</caption>
+      <caption xml:lang="pl">Menu zasobnika aplikacji w zaokrąglonym motywie COSMIC</caption>
+      <caption xml:lang="pt-BR">Menu de bandeja de um aplicativo com um tema COSMIC arredondado</caption>
+      <caption xml:lang="ru">Меню приложения в области уведомлений со скруглённой темой COSMIC</caption>
+      <caption xml:lang="uk">Меню застосунку в області сповіщень із заокругленою темою COSMIC</caption>
+      <caption xml:lang="zh-CN">圆角 COSMIC 主题下的应用托盘菜单</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/settings.png</image>
       <caption>The settings view, where any item can be pinned to the panel</caption>
-      <caption xml:lang="pl">Widok ustawień, gdzie każdy element może być przypięty do panelu</caption>
+      <caption xml:lang="de">Die Einstellungsansicht, in der jedes Element an das Panel angeheftet werden kann</caption>
+      <caption xml:lang="es">Vista de configuración, donde cualquier elemento se puede fijar al panel</caption>
+      <caption xml:lang="fr">Vue des paramètres, où chaque élément peut être épinglé au panneau</caption>
+      <caption xml:lang="it">Vista delle impostazioni, dove ogni elemento può essere fissato al pannello</caption>
+      <caption xml:lang="nl">De instellingen, waar elk item aan het paneel kan worden vastgemaakt</caption>
+      <caption xml:lang="pl">Widok ustawień, w którym każdy element można przypiąć do panelu</caption>
+      <caption xml:lang="pt-BR">Tela de configurações, onde qualquer item pode ser fixado no painel</caption>
+      <caption xml:lang="ru">Параметры, где любой элемент можно закрепить на панели</caption>
+      <caption xml:lang="uk">Налаштування, де будь-який елемент можна закріпити на панелі</caption>
+      <caption xml:lang="zh-CN">设置视图，可将任意项目固定到面板</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/pinned-item-menu.png</image>
       <caption>A pinned item's menu, opened straight from the panel</caption>
-      <caption xml:lang="pl">Menu przypiętego elementu , otwarte bezpośrednio z panelu</caption>
+      <caption xml:lang="de">Das direkt aus dem Panel geöffnete Menü eines angehefteten Elements</caption>
+      <caption xml:lang="es">Menú de un elemento fijado, abierto directamente desde el panel</caption>
+      <caption xml:lang="fr">Menu d’un élément épinglé, ouvert directement depuis le panneau</caption>
+      <caption xml:lang="it">Menu di un elemento fissato, aperto direttamente dal pannello</caption>
+      <caption xml:lang="nl">Het menu van een vastgemaakt item, rechtstreeks vanuit het paneel geopend</caption>
+      <caption xml:lang="pl">Menu przypiętego elementu otwarte bezpośrednio z panelu</caption>
+      <caption xml:lang="pt-BR">Menu de um item fixado, aberto diretamente pelo painel</caption>
+      <caption xml:lang="ru">Меню закреплённого элемента, открытое непосредственно с панели</caption>
+      <caption xml:lang="uk">Меню закріпленого елемента, відкрите безпосередньо з панелі</caption>
+      <caption xml:lang="zh-CN">直接从面板打开的固定项目菜单</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-light.png</image>
       <caption>The same popup on a light theme, with symbolic icons adapted and coloured icons preserved</caption>
-      <caption xml:lang="pl">Te samo wyskakujące okno w motywie jasnym, z symbolicznymi ikonami oraz zachowane kolorowane ikony</caption>
+      <caption xml:lang="de">Dasselbe Pop-up mit einem hellen Design, angepassten symbolischen und erhaltenen farbigen Symbolen</caption>
+      <caption xml:lang="es">La misma ventana con un tema claro, los iconos simbólicos adaptados y los de color conservados</caption>
+      <caption xml:lang="fr">La même fenêtre avec un thème clair, les icônes symboliques adaptées et les icônes colorées préservées</caption>
+      <caption xml:lang="it">La stessa finestra con un tema chiaro, le icone simboliche adattate e quelle colorate preservate</caption>
+      <caption xml:lang="nl">Dezelfde pop-up met een licht thema, aangepaste symbolische pictogrammen en behouden gekleurde pictogrammen</caption>
+      <caption xml:lang="pl">To samo okno podręczne w jasnym motywie, z dostosowanymi ikonami symbolicznymi i zachowanymi ikonami kolorowymi</caption>
+      <caption xml:lang="pt-BR">A mesma janela com um tema claro, ícones simbólicos adaptados e ícones coloridos preservados</caption>
+      <caption xml:lang="ru">То же всплывающее окно со светлой темой, адаптированными символьными и сохранёнными цветными значками</caption>
+      <caption xml:lang="uk">Те саме спливне вікно зі світлою темою, адаптованими символьними та збереженими кольоровими піктограмами</caption>
+      <caption xml:lang="zh-CN">浅色主题下的同一弹出窗口，符号图标已适配，彩色图标则保持原样</caption>
     </screenshot>
   </screenshots>
   <launchable type="desktop-id">io.github.marcelogomes90.cosmic-ext-applet-status-hub.desktop</launchable>
@@ -91,15 +235,96 @@
     <keyword>StatusNotifierItem</keyword>
     <keyword>DBusMenu</keyword>
     <keyword>Panel</keyword>
+    <keyword xml:lang="de">COSMIC</keyword>
+    <keyword xml:lang="de">Applet</keyword>
+    <keyword xml:lang="de">Infobereich</keyword>
+    <keyword xml:lang="de">Anzeige</keyword>
+    <keyword xml:lang="de">Status</keyword>
+    <keyword xml:lang="de">SNI</keyword>
+    <keyword xml:lang="de">StatusNotifierItem</keyword>
+    <keyword xml:lang="de">DBusMenu</keyword>
+    <keyword xml:lang="de">Panel</keyword>
+    <keyword xml:lang="es">COSMIC</keyword>
+    <keyword xml:lang="es">Applet</keyword>
+    <keyword xml:lang="es">Bandeja</keyword>
+    <keyword xml:lang="es">Indicador</keyword>
+    <keyword xml:lang="es">Estado</keyword>
+    <keyword xml:lang="es">SNI</keyword>
+    <keyword xml:lang="es">StatusNotifierItem</keyword>
+    <keyword xml:lang="es">DBusMenu</keyword>
+    <keyword xml:lang="es">Panel</keyword>
+    <keyword xml:lang="fr">COSMIC</keyword>
+    <keyword xml:lang="fr">Applet</keyword>
+    <keyword xml:lang="fr">Zone de notification</keyword>
+    <keyword xml:lang="fr">Indicateur</keyword>
+    <keyword xml:lang="fr">État</keyword>
+    <keyword xml:lang="fr">SNI</keyword>
+    <keyword xml:lang="fr">StatusNotifierItem</keyword>
+    <keyword xml:lang="fr">DBusMenu</keyword>
+    <keyword xml:lang="fr">Panneau</keyword>
+    <keyword xml:lang="it">COSMIC</keyword>
+    <keyword xml:lang="it">Applet</keyword>
+    <keyword xml:lang="it">Area di notifica</keyword>
+    <keyword xml:lang="it">Indicatore</keyword>
+    <keyword xml:lang="it">Stato</keyword>
+    <keyword xml:lang="it">SNI</keyword>
+    <keyword xml:lang="it">StatusNotifierItem</keyword>
+    <keyword xml:lang="it">DBusMenu</keyword>
+    <keyword xml:lang="it">Pannello</keyword>
+    <keyword xml:lang="nl">COSMIC</keyword>
+    <keyword xml:lang="nl">Applet</keyword>
+    <keyword xml:lang="nl">Systeemvak</keyword>
+    <keyword xml:lang="nl">Indicator</keyword>
+    <keyword xml:lang="nl">Status</keyword>
+    <keyword xml:lang="nl">SNI</keyword>
+    <keyword xml:lang="nl">StatusNotifierItem</keyword>
+    <keyword xml:lang="nl">DBusMenu</keyword>
+    <keyword xml:lang="nl">Paneel</keyword>
     <keyword xml:lang="pl">COSMIC</keyword>
     <keyword xml:lang="pl">Aplet</keyword>
-    <keyword xml:lang="pl">Tacka</keyword>
+    <keyword xml:lang="pl">Zasobnik</keyword>
     <keyword xml:lang="pl">Wskaźnik</keyword>
-    <keyword xml:lang="pl">Status</keyword>
+    <keyword xml:lang="pl">Stan</keyword>
     <keyword xml:lang="pl">SNI</keyword>
     <keyword xml:lang="pl">StatusNotifierItem</keyword>
     <keyword xml:lang="pl">DBusMenu</keyword>
     <keyword xml:lang="pl">Panel</keyword>
+    <keyword xml:lang="pt-BR">COSMIC</keyword>
+    <keyword xml:lang="pt-BR">Applet</keyword>
+    <keyword xml:lang="pt-BR">Bandeja</keyword>
+    <keyword xml:lang="pt-BR">Indicador</keyword>
+    <keyword xml:lang="pt-BR">Status</keyword>
+    <keyword xml:lang="pt-BR">SNI</keyword>
+    <keyword xml:lang="pt-BR">StatusNotifierItem</keyword>
+    <keyword xml:lang="pt-BR">DBusMenu</keyword>
+    <keyword xml:lang="pt-BR">Painel</keyword>
+    <keyword xml:lang="ru">COSMIC</keyword>
+    <keyword xml:lang="ru">Апплет</keyword>
+    <keyword xml:lang="ru">Область уведомлений</keyword>
+    <keyword xml:lang="ru">Индикатор</keyword>
+    <keyword xml:lang="ru">Состояние</keyword>
+    <keyword xml:lang="ru">SNI</keyword>
+    <keyword xml:lang="ru">StatusNotifierItem</keyword>
+    <keyword xml:lang="ru">DBusMenu</keyword>
+    <keyword xml:lang="ru">Панель</keyword>
+    <keyword xml:lang="uk">COSMIC</keyword>
+    <keyword xml:lang="uk">Аплет</keyword>
+    <keyword xml:lang="uk">Область сповіщень</keyword>
+    <keyword xml:lang="uk">Індикатор</keyword>
+    <keyword xml:lang="uk">Стан</keyword>
+    <keyword xml:lang="uk">SNI</keyword>
+    <keyword xml:lang="uk">StatusNotifierItem</keyword>
+    <keyword xml:lang="uk">DBusMenu</keyword>
+    <keyword xml:lang="uk">Панель</keyword>
+    <keyword xml:lang="zh-CN">COSMIC</keyword>
+    <keyword xml:lang="zh-CN">小程序</keyword>
+    <keyword xml:lang="zh-CN">托盘</keyword>
+    <keyword xml:lang="zh-CN">指示器</keyword>
+    <keyword xml:lang="zh-CN">状态</keyword>
+    <keyword xml:lang="zh-CN">SNI</keyword>
+    <keyword xml:lang="zh-CN">StatusNotifierItem</keyword>
+    <keyword xml:lang="zh-CN">DBusMenu</keyword>
+    <keyword xml:lang="zh-CN">面板</keyword>
   </keywords>
   <releases>
     <release type="stable" version="1.5.6" date="2026-09-10">

@@ -70,6 +70,7 @@ mod tests {
             ("fr", include_str!("../i18n/fr/status-hub.ftl")),
             ("it", include_str!("../i18n/it/status-hub.ftl")),
             ("nl", include_str!("../i18n/nl/status-hub.ftl")),
+            ("pl", include_str!("../i18n/pl/status-hub.ftl")),
             ("pt-BR", include_str!("../i18n/pt-BR/status-hub.ftl")),
             ("ru", include_str!("../i18n/ru/status-hub.ftl")),
             ("uk", include_str!("../i18n/uk/status-hub.ftl")),
