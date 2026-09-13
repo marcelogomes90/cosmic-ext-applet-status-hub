@@ -1,0 +1,10 @@
+app-title = Centrum stavu
+settings = Nastavení
+appearance = Vzhled
+colour-icons = Barevné ikony podle motivu
+tray-icons = Ikony v oznamovací oblasti
+save = Uložit
+no-watcher = Není spuštěn žádný sledovač stavových oznámení
+connecting = Připojování…
+empty-state = Nejsou k dispozici žádné aplikace
+pin-to-panel = Připnout na panel
