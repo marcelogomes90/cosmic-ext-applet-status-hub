@@ -8,43 +8,59 @@
     <name>marcelogomes90</name>
   </developer>
   <name>Status Hub</name>
+  <name xml:lang="pl">Centrum Statusów</name>
   <summary>Application tray items, gathered behind a single panel button</summary>
+  <summary xml:lang="pl">Aplikacje na tacce, zebrane w jednym przycisku na panelu</summary>
   <description>
     <p>Status Hub is a StatusNotifierItem tray for the COSMIC desktop. It adds a hub button to the panel; clicking it opens a compact popup holding the tray items and wraps them onto additional rows when there are many. Items reached for often can be pinned beside the hub so they stay one click away. A popup item's menu stays in the same card behind a divider, while a pinned item's menu is anchored to its panel slot.</p>
+    <p xml:lang="pl">Centum Statusów jest tacką StatusNotifierItem dla środowiska COSMIC. Dodaje przycisk centrum statusów na panelu; kliknięcie go otwiera wyskakujące okno w którym są elementy na tackę i uszeregowywuje je, jeśli jest ich odpowiednio dużo. Elementy często używane mogą być przypięte jednym klinięciem. Menu tych elementów w wyskakującym oknie zostaje w separatorze, a menu przypiętych elementów jest otwierane w dedykowanym miejscu w panelu.</p>
     <p>It is an independent implementation written from the StatusNotifierItem and DBusMenu specifications. It is not a fork of COSMIC's Status Area, and it is built to run alongside it.</p>
+    <p xml:lang="pl">Jest to niezależna implementacja napisana na podstawie specyfikacji StatusNotifierItem i DBusMenua. Nie jest to fork Status Area z COSMIC, i jest zbudowany by go uzupełniać.</p>
     <p>The tray is the part of a desktop most exposed to badly behaved applications: they hang, they exit without warning, they answer with the wrong types, and they restart under a new bus name a millisecond after the old one vanished. Status Hub is organised around not letting any of that become your problem:</p>
+    <p xml:lang="pl">Tacka jest częścią pulpitu najbardziej narażoną na źle zachowujące się aplikacje: zawieszają się, zamykają bez ostrzeżenia, odpowiadają ze złym typem i restartują się w nowej szynie milisekundy po zniknięciu starych. Centum Statusów jest stworzony po to, by nie był to Twój problem:</p>
     <ul>
       <li>An item exists exactly as long as its bus owner exists, so no leftover icons are stranded when an application exits without unregistering.</li>
+      <li xml:lang="pl">Element trwa dokładnie tyle ile szyna właściciela, więc ubijane są ikony, których aplikacje kończą bez ostrzeżenia.</li>
       <li>Every remote call has a timeout and every item has its own error budget, so one wedged application cannot delay another, or the popup, or the panel.</li>
+      <li xml:lang="pl">Każde zdalne zawołanie jest ograniczane czasowo i ma swój budżet błędów, więc jedna aplikacja nie może opóźniać innej, wyskakującego okna czy panelu.</li>
       <li>Every asynchronous reply carries a generation token, so a reply belonging to a process that has already exited can never update its successor.</li>
+      <li xml:lang="pl">Każda asynchroniczna odpowiedź przenosi token swojego stworzenia, więc odpowiedź należąca do procesu, który został zakończony nigdy nie zaktualizuje statusu jej następcy.</li>
       <li>Ordering is a pure function of discovery order and a small remembered list, never of the order in which replies happened to arrive, so every panel shows the same order.</li>
+      <li xml:lang="pl">Kolejność jest czystą funkcją kolejności odkrywania i dodatkowo małą lista zapamiętanych, nigdy kolejnością w której odpowiedzi przybyły, więc każdy panel ma stałą kolejność.</li>
       <li>The applet dies with the panel and is relaunched by it, rebuilding its entire state on every start, so restarting the panel never requires restarting a tray application.</li>
+      <li xml:lang="pl">Aplet jest zamykany razem z panelem i uruchamiany razem z nim, budowany od nowa przy każdym starcioe, więc restart panelu nigdy nie wymaga ponownego uruchomienia tacki aplikacji.</li>
     </ul>
   </description>
   <screenshots>
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/tray-popup.png</image>
       <caption>Tray items gathered in the popup, under a header that is always there</caption>
+      <caption xml:lang="pl">Elementy na tacce w wyskakującym oknie, pod sekcją która jest tam zawsze</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu.png</image>
       <caption>An application's tray menu, opened from the popup</caption>
+      <caption xml:lang="pl">Menu tacki aplikacji, otworzone z wyskakującego okna</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-rounded.png</image>
       <caption>An application's tray menu under a rounded COSMIC theme</caption>
+      <caption xml:lang="pl">Menu tacki aplikacji w zaokrąglonym motywie COSMIC</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/settings.png</image>
       <caption>The settings view, where any item can be pinned to the panel</caption>
+      <caption xml:lang="pl">Widok ustawień, gdzie każdy element może być przypięty do panelu</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/pinned-item-menu.png</image>
       <caption>A pinned item's menu, opened straight from the panel</caption>
+      <caption xml:lang="pl">Menu przypiętego elementu , otwarte bezpośrednio z panelu</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/marcelogomes90/cosmic-ext-applet-status-hub/main/resources/screenshots/item-menu-light.png</image>
       <caption>The same popup on a light theme, with symbolic icons adapted and coloured icons preserved</caption>
+      <caption xml:lang="pl">Te samo wyskakujące okno w motywie jasnym, z symbolicznymi ikonami oraz zachowane kolorowane ikony</caption>
     </screenshot>
   </screenshots>
   <launchable type="desktop-id">io.github.marcelogomes90.cosmic-ext-applet-status-hub.desktop</launchable>
@@ -75,6 +91,15 @@
     <keyword>StatusNotifierItem</keyword>
     <keyword>DBusMenu</keyword>
     <keyword>Panel</keyword>
+    <keyword xml:lang="pl">COSMIC</keyword>
+    <keyword xml:lang="pl">Aplet</keyword>
+    <keyword xml:lang="pl">Tacka</keyword>
+    <keyword xml:lang="pl">Wskaźnik</keyword>
+    <keyword xml:lang="pl">Status</keyword>
+    <keyword xml:lang="pl">SNI</keyword>
+    <keyword xml:lang="pl">StatusNotifierItem</keyword>
+    <keyword xml:lang="pl">DBusMenu</keyword>
+    <keyword xml:lang="pl">Panel</keyword>
   </keywords>
   <releases>
     <release type="stable" version="1.5.6" date="2026-09-10">

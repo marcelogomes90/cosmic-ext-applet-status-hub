@@ -1,0 +1,10 @@
+app-title = Centrum Statusów
+settings = Ustawienia
+appearance = Wygląd
+colour-icons = Dopasuj kolor ikon do motywu
+tray-icons = Ikony na tacce
+save = Zapisz
+no-watcher = Żaden obserwator powiadomień nie jest uruchomiony
+connecting = Łączenie…
+empty-state = Brak dostępnych aplikacji
+pin-to-panel = Przypnij do panelu
