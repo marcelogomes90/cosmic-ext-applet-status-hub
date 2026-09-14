@@ -15,22 +15,19 @@ pub const HEADER_CONTROL: u16 = 32;
 pub const HEADER_ICON: u16 = 16;
 pub const DRAG_HANDLE_SIZE: u16 = 16;
 pub const SETTINGS_ROW_ICON: u16 = 24;
+pub const SECTION_ICON: u16 = 14;
+pub const ROW_ICON: u16 = 16;
 
 pub const LIST_MIN_ROW: u16 = 32;
 
 const SECTION_HEADER: u16 = 21;
-const SECTION_HEADER_SPACING: u16 = 8;
-const BODY_LINE: u16 = 21;
-
-pub const SETTINGS_LABEL_LINES: u16 = 2;
+const SECTION_HEADER_SPACING: u16 = 12;
 
 pub const MARGIN_X: u16 = 16;
 pub const MARGIN_Y: u16 = 12;
 pub const LIST_ROW_INSET: u16 = 16;
 
-pub const DRAG_HANDLE_ICON: &str = "grip-lines-symbolic";
 pub const PANEL_ICON: &str = "io.github.marcelogomes90.cosmic-ext-applet-status-hub-symbolic";
-pub const SETTINGS_ICON: &str = "emblem-system-symbolic";
 
 pub fn header_icon_padding() -> u16 {
     HEADER_CONTROL.saturating_sub(HEADER_ICON) / 2
@@ -52,14 +49,8 @@ pub fn list_row_height(spacing: u16) -> u16 {
     LIST_MIN_ROW.saturating_add(spacing.saturating_mul(2))
 }
 
-pub fn settings_label_height() -> u16 {
-    BODY_LINE.saturating_mul(SETTINGS_LABEL_LINES)
-}
-
-pub fn settings_label_row_height(spacing: u16) -> u16 {
-    settings_label_height()
-        .max(LIST_MIN_ROW)
-        .saturating_add(spacing.saturating_mul(2))
+pub fn section_header_spacing() -> u16 {
+    SECTION_HEADER_SPACING
 }
 
 pub fn section_header_height() -> u16 {
@@ -167,9 +158,10 @@ pub fn header_height(control: u16, vertical_padding: u16) -> u16 {
     control.saturating_add(vertical_padding.saturating_mul(2))
 }
 
-pub fn settings_body_height(rows: usize, spacing: u16, padding: u16) -> u16 {
-    section_header_height()
-        .saturating_add(settings_label_row_height(spacing))
+pub fn settings_body_height(rows: usize, links: usize, spacing: u16, padding: u16) -> u16 {
+    section_height(1, spacing)
+        .saturating_add(section_spacing())
+        .saturating_add(section_height(links.max(1), spacing))
         .saturating_add(section_spacing())
         .saturating_add(section_height(rows.max(1), spacing))
         .saturating_add(padding.saturating_mul(2))
@@ -679,9 +671,10 @@ mod tests {
     #[test]
     fn the_settings_list_is_as_tall_as_the_rows_it_holds() {
         assert_eq!(
-            settings_body_height(3, 4, 12),
-            section_header_height()
-                + settings_label_row_height(4)
+            settings_body_height(3, 2, 4, 12),
+            section_height(1, 4)
+                + section_spacing()
+                + section_height(2, 4)
                 + section_spacing()
                 + section_height(3, 4)
                 + 24
@@ -689,15 +682,17 @@ mod tests {
     }
 
     #[test]
-    fn a_preference_row_leaves_room_for_a_label_that_wraps() {
-        assert_eq!(settings_label_height(), BODY_LINE * SETTINGS_LABEL_LINES);
-        assert!(settings_label_row_height(4) > list_row_height(4));
-        assert_eq!(settings_label_row_height(4), settings_label_height() + 8);
+    fn the_links_section_is_paid_for_even_when_the_tray_is_empty() {
+        assert!(settings_body_height(0, 3, 4, 12) > settings_body_height(0, 1, 4, 12));
     }
 
     #[test]
-    fn a_preference_row_is_never_shorter_than_the_rows_below_it() {
-        assert!(settings_label_row_height(0) >= LIST_MIN_ROW);
+    fn every_section_is_measured_by_the_same_row_height() {
+        assert_eq!(
+            settings_body_height(1, 1, 4, 12),
+            3 * section_height(1, 4) + 2 * section_spacing() + 24,
+            "the preference row costs no more than any other single row"
+        );
     }
 
     #[test]
@@ -742,13 +737,13 @@ mod tests {
 
     #[test]
     fn a_denser_theme_gives_the_same_list_a_shorter_body() {
-        assert!(settings_body_height(4, 4, 12) < settings_body_height(4, 12, 12));
+        assert!(settings_body_height(4, 3, 4, 12) < settings_body_height(4, 3, 12, 12));
     }
 
     #[test]
     fn many_settings_rows_scroll_inside_a_bounded_popup() {
         assert_eq!(
-            settings_body_height(usize::MAX, 4, 12),
+            settings_body_height(usize::MAX, 3, 4, 12),
             settings_body_max_height()
         );
         assert_eq!(

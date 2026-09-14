@@ -1,10 +1,14 @@
 app-title = Центр стану
 settings = Налаштування
 appearance = Вигляд
-colour-icons = Забарвлювати піктограми відповідно до теми
+colour-icons = Забарвлювати піктограми
 tray-icons = Піктограми області сповіщень
+links = Посилання
 save = Зберегти
 no-watcher = Служба сповіщень про стан не запущена
 connecting = Підключення…
 empty-state = Немає доступних застосунків
 pin-to-panel = Закріпити на панелі
+link-issues = Проблеми
+link-developer = Розробник
+link-repository = Репозиторій

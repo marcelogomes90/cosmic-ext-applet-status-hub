@@ -1,10 +1,14 @@
 app-title = Statuszentrale
 settings = Einstellungen
 appearance = Erscheinungsbild
-colour-icons = Symbole an das Design anpassen
+colour-icons = Symbole einfärben
 tray-icons = Tray-Symbole
+links = Links
 save = Speichern
 no-watcher = Es wird kein Statusbenachrichtigungsdienst ausgeführt
 connecting = Verbindung wird hergestellt…
 empty-state = Keine Apps verfügbar
 pin-to-panel = An Panel anheften
+link-issues = Probleme
+link-developer = Entwickler
+link-repository = Repository

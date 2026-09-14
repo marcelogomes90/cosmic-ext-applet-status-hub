@@ -1,10 +1,14 @@
 app-title = Центр состояния
 settings = Настройки
 appearance = Внешний вид
-colour-icons = Окрашивать значки в соответствии с темой
+colour-icons = Окрашивать значки
 tray-icons = Значки в области уведомлений
+links = Ссылки
 save = Сохранить
 no-watcher = Служба уведомлений о состоянии не запущена
 connecting = Подключение…
 empty-state = Нет доступных приложений
 pin-to-panel = Закрепить на панели
+link-issues = Проблемы
+link-developer = Разработчик
+link-repository = Репозиторий

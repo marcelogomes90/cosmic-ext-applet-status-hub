@@ -1,10 +1,14 @@
 app-title = Centro di stato
 settings = Impostazioni
 appearance = Aspetto
-colour-icons = Colora le icone in base al tema
+colour-icons = Colora le icone
 tray-icons = Icone dell’area di notifica
+links = Collegamenti
 save = Salva
 no-watcher = Nessun servizio di notifica dello stato è in esecuzione
 connecting = Connessione…
 empty-state = Nessuna applicazione disponibile
 pin-to-panel = Fissa al pannello
+link-issues = Problemi
+link-developer = Sviluppatore
+link-repository = Repository

@@ -7,6 +7,7 @@ pub mod order;
 pub mod pins;
 pub mod popup;
 pub mod subscription;
+pub mod symbols;
 pub mod wayland;
 
 use cosmic::Element;
@@ -20,7 +21,7 @@ use cosmic::iced::platform_specific::runtime::wayland::popup::SctkPositioner;
 use cosmic::iced::platform_specific::shell::commands::popup::destroy_popup;
 use cosmic::iced::{Length, Subscription, window};
 use cosmic::widget::button::Catalog as _;
-use cosmic::widget::{DndSource, Id, dnd_destination, icon, list, mouse_area, settings, text};
+use cosmic::widget::{DndSource, Id, dnd_destination, icon, list, mouse_area, text};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -34,7 +35,9 @@ use crate::applet::wayland::{ActivateRequest, Raise, TokenRequest, WaylandReques
 use crate::core::menu::MenuModel;
 use crate::core::model::{ItemAddress, TraySnapshot, WatcherState};
 use crate::core::{CoreCommand, CoreHandle};
-use crate::fl;
+use crate::{fl, links};
+
+const LINKS: usize = 3;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum PopupState {
@@ -372,11 +375,13 @@ impl StatusHub {
     }
 
     fn drag_grip<'a, M: 'a>() -> Element<'a, M> {
-        icon::from_name(popup::DRAG_HANDLE_ICON)
-            .size(popup::DRAG_HANDLE_SIZE)
-            .symbolic(true)
-            .icon()
+        Self::symbol(symbols::grip(), popup::DRAG_HANDLE_SIZE)
+    }
+
+    fn symbol<'a, M: 'a>(handle: icon::Handle, size: u16) -> Element<'a, M> {
+        cosmic::widget::icon(handle)
             .class(symbolic_ink())
+            .size(size)
             .into()
     }
 
@@ -400,24 +405,39 @@ impl StatusHub {
         .into()
     }
 
-    fn settings_section<'a>() -> settings::Section<'a, Message> {
-        settings::section::with_column(
-            list::list_column()
-                .list_item_padding(popup::list_row_padding(popup::list_row_spacing())),
-        )
+    fn settings_card<'a>() -> list::ListColumn<'a, Message> {
+        list::list_column().list_item_padding(popup::list_row_padding(popup::list_row_spacing()))
+    }
+
+    fn settings_section(
+        handle: icon::Handle,
+        title: String,
+        card: list::ListColumn<'_, Message>,
+    ) -> Element<'_, Message> {
+        let heading = cosmic::widget::row::with_children(vec![
+            Self::symbol(handle, popup::SECTION_ICON),
+            text::heading(title).into(),
+        ])
+        .align_y(cosmic::iced::Alignment::Center)
+        .spacing(cosmic::theme::spacing().space_xxs);
+
+        cosmic::widget::column::with_children(vec![heading.into(), card.into()])
+            .spacing(popup::section_header_spacing())
+            .into()
     }
 
     fn settings_toggle_row<'a>(
+        handle: icon::Handle,
         label: String,
         toggled: bool,
         on_toggle: impl Fn(bool) -> Message + 'static,
     ) -> list::ListButton<'a, Message> {
         let on_press = on_toggle(!toggled);
         let row = cosmic::widget::row::with_children(vec![
+            Self::symbol(handle, popup::ROW_ICON),
             text::body(label)
                 .width(Length::Fill)
-                .height(Length::Fixed(f32::from(popup::settings_label_height())))
-                .align_y(cosmic::iced::Alignment::Center)
+                .ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(2)))
                 .into(),
             cosmic::widget::toggler(toggled)
                 .width(Length::Shrink)
@@ -428,6 +448,25 @@ impl StatusHub {
         .spacing(cosmic::theme::spacing().space_xs);
 
         list::button(row).on_press(on_press)
+    }
+
+    fn link_row<'a>(
+        handle: icon::Handle,
+        label: String,
+        url: &'static str,
+    ) -> list::ListButton<'a, Message> {
+        let row = cosmic::widget::row::with_children(vec![
+            Self::symbol(handle, popup::ROW_ICON),
+            text::body(label)
+                .width(Length::Fill)
+                .ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(1)))
+                .into(),
+            Self::symbol(symbols::link(), popup::ROW_ICON),
+        ])
+        .align_y(cosmic::iced::Alignment::Center)
+        .spacing(cosmic::theme::spacing().space_xs);
+
+        list::button(row).on_press(Message::OpenLink(url))
     }
 
     fn settings_drag_preview(
@@ -464,6 +503,7 @@ impl StatusHub {
             PopupBody::Items => self.items_height(),
             PopupBody::Settings => popup::settings_body_height(
                 self.settings_rows().len(),
+                LINKS,
                 popup::list_row_spacing(),
                 popup::MARGIN_Y,
             ),
@@ -499,15 +539,11 @@ impl StatusHub {
                 .on_press(Message::SaveSettings)
                 .into()
         } else {
-            let settings = cosmic::widget::button::icon(
-                icon::from_name(popup::SETTINGS_ICON)
-                    .size(popup::HEADER_ICON)
-                    .symbolic(true),
-            )
-            .class(accent_icon_button())
-            .padding(popup::header_icon_padding())
-            .width(Length::Fixed(control))
-            .height(Length::Fixed(control));
+            let settings = cosmic::widget::button::icon(symbols::settings())
+                .class(accent_icon_button())
+                .padding(popup::header_icon_padding())
+                .width(Length::Fixed(control))
+                .height(Length::Fixed(control));
             settings.on_press(Message::OpenSettings).into()
         };
 
@@ -577,24 +613,48 @@ impl StatusHub {
             .draft_appearance
             .unwrap_or(self.appearance)
             .colour_icons();
-        let colours = Self::settings_toggle_row(
-            fl!("colour-icons"),
-            colour_icons,
-            Message::ToggleColourIcons,
+        let appearance = Self::settings_section(
+            symbols::appearance(),
+            fl!("appearance"),
+            Self::settings_card().add(Self::settings_toggle_row(
+                symbols::droplet(),
+                fl!("colour-icons"),
+                colour_icons,
+                Message::ToggleColourIcons,
+            )),
         );
-        let appearance = Self::settings_section()
-            .title(fl!("appearance"))
-            .add(colours);
 
-        let tray = Self::settings_section().title(fl!("tray-icons"));
-        let tray = if rows.is_empty() {
-            tray.add(text::body(fl!("empty-state")))
+        let card = Self::settings_card();
+        let card = if rows.is_empty() {
+            card.add(text::body(fl!("empty-state")))
         } else {
             rows.into_iter()
-                .fold(tray, |tray, item| tray.add(self.settings_row(item)))
+                .fold(card, |card, item| card.add(self.settings_row(item)))
         };
+        let tray = Self::settings_section(symbols::grid(), fl!("tray-icons"), card);
 
-        let list = cosmic::widget::column::with_children(vec![appearance.into(), tray.into()])
+        let links = Self::settings_section(
+            symbols::link(),
+            fl!("links"),
+            Self::settings_card()
+                .add(Self::link_row(
+                    symbols::bug(),
+                    fl!("link-issues"),
+                    links::ISSUES,
+                ))
+                .add(Self::link_row(
+                    symbols::person(),
+                    fl!("link-developer"),
+                    links::DEVELOPER,
+                ))
+                .add(Self::link_row(
+                    symbols::code(),
+                    fl!("link-repository"),
+                    links::REPOSITORY,
+                )),
+        );
+
+        let list = cosmic::widget::column::with_children(vec![appearance, links, tray])
             .width(Length::Fill)
             .spacing(popup::section_spacing());
 
@@ -1384,6 +1444,11 @@ impl cosmic::Application for StatusHub {
                 appearance.set_colour_icons(colour_icons);
                 cosmic::task::message(Message::Relayout)
             }
+
+            Message::OpenLink(url) => cosmic::task::future(async move {
+                links::open(url).await;
+                Message::Relayout
+            }),
 
             Message::Wayland(update) => self.on_wayland(update),
         }

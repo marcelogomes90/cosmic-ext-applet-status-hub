@@ -1,10 +1,14 @@
 app-title = Centrum stavu
 settings = Nastavení
 appearance = Vzhled
-colour-icons = Barevné ikony podle motivu
+colour-icons = Obarvit ikony
 tray-icons = Ikony v oznamovací oblasti
+links = Odkazy
 save = Uložit
 no-watcher = Není spuštěn žádný sledovač stavových oznámení
 connecting = Připojování…
 empty-state = Nejsou k dispozici žádné aplikace
 pin-to-panel = Připnout na panel
+link-issues = Hlášení chyb
+link-developer = Vývojář
+link-repository = Repozitář

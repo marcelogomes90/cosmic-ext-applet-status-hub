@@ -1,10 +1,14 @@
 app-title = Status Hub
 settings = Configurações
 appearance = Aparência
-colour-icons = Colorir ícones de acordo com o tema
+colour-icons = Colorir ícones
 tray-icons = Ícones da bandeja
+links = Links
 save = Salvar
 no-watcher = Nenhum status notifier watcher em execução
 connecting = Conectando…
 empty-state = Nenhum aplicativo disponível
 pin-to-panel = Fixar no painel
+link-issues = Problemas
+link-developer = Desenvolvedor
+link-repository = Repositório

@@ -1,10 +1,14 @@
 app-title = 状态中心
 settings = 设置
 appearance = 外观
-colour-icons = 根据主题为图标着色
+colour-icons = 为图标着色
 tray-icons = 托盘图标
+links = 链接
 save = 保存
 no-watcher = 没有正在运行的状态通知服务
 connecting = 正在连接…
 empty-state = 没有可用的应用
 pin-to-panel = 固定到面板
+link-issues = 问题
+link-developer = 开发者
+link-repository = 仓库

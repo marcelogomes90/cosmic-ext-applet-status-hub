@@ -28,6 +28,7 @@ pub enum Message {
     DragStart(ItemKey),
     DragOver(ItemKey),
     DragEnd,
+    OpenLink(&'static str),
     Wayland(WaylandUpdate),
     Relayout,
 }

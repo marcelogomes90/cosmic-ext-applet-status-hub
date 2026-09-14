@@ -1,10 +1,14 @@
 app-title = Statushub
 settings = Instellingen
 appearance = Uiterlijk
-colour-icons = Pictogrammen inkleuren volgens het thema
+colour-icons = Pictogrammen inkleuren
 tray-icons = Systeemvakpictogrammen
+links = Links
 save = Opslaan
 no-watcher = Er is geen statusmeldingsservice actief
 connecting = Verbinden…
 empty-state = Geen apps beschikbaar
 pin-to-panel = Vastmaken aan paneel
+link-issues = Problemen
+link-developer = Ontwikkelaar
+link-repository = Repository

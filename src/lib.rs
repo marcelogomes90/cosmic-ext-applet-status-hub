@@ -5,6 +5,7 @@ pub mod applet;
 pub mod core;
 pub mod flatpak;
 pub mod i18n;
+pub mod links;
 
 #[cfg(feature = "testkit")]
 pub mod testkit;
