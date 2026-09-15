@@ -352,6 +352,17 @@
     <keyword xml:lang="zh-CN">面板</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.5.9" date="2026-09-14">
+      <description>
+        <p>This patch gives the settings popup its own icons and a Links section.</p>
+        <ul>
+          <li>Adds a Links section to settings, opening the issue tracker, the repository, and the developer's page in the browser.</li>
+          <li>Ships the popup's icons compiled into the binary, so the settings button, section headings, and drag handles look the same whatever icon theme is installed.</li>
+          <li>Heads each settings section with an icon and gives every row its own icon.</li>
+          <li>Sizes a settings row to the text it holds, shortening an over-long label instead of reserving two lines on every row.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.5.8" date="2026-09-13">
       <description>
         <p>This patch adds Czech to the languages Status Hub speaks.</p>
