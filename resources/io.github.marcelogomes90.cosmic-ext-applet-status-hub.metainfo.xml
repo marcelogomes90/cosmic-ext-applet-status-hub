@@ -352,6 +352,16 @@
     <keyword xml:lang="zh-CN">面板</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.5.10" date="2026-09-16">
+      <description>
+        <p>This patch settles the popup header on the desktop's own icon and the theme's ordinary ink.</p>
+        <ul>
+          <li>Draws the settings button with the desktop's own icon, so it matches every other applet whatever icon theme is installed, in place of the glyph compiled into the binary.</li>
+          <li>Paints the settings and save buttons in the theme's ordinary text colour, rather than picking the settings icon out in the accent colour.</li>
+          <li>Marks the repository link with the same glyph the developer's other applets use.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.5.9" date="2026-09-14">
       <description>
         <p>This patch gives the settings popup its own icons and a Links section.</p>
