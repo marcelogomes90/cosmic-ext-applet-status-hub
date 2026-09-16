@@ -22,5 +22,18 @@ bundled! {
     grip => "grip-symbolic.svg",
     link => "link-symbolic.svg",
     person => "person-symbolic.svg",
-    settings => "settings-symbolic.svg",
+}
+
+macro_rules! named {
+    ($($name:ident => $icon:literal,)*) => {
+        $(
+            pub fn $name() -> widget::icon::Handle {
+                widget::icon::from_name($icon).handle()
+            }
+        )*
+    };
+}
+
+named! {
+    settings => "preferences-system-symbolic",
 }
