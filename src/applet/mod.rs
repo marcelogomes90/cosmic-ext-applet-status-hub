@@ -145,31 +145,33 @@ fn symbolic_ink() -> cosmic::theme::Svg {
     INK.with(cosmic::theme::Svg::clone)
 }
 
-fn accent_icon_style(
+fn neutral_ink_style(
     mut style: cosmic::widget::button::Style,
     theme: &cosmic::Theme,
 ) -> cosmic::widget::button::Style {
-    style.icon_color = Some(theme.cosmic().accent.base.into());
+    let ink = theme.cosmic().background(theme.transparent).on;
+    style.icon_color = Some(ink.into());
+    style.text_color = Some(ink.into());
     style
 }
 
-fn accent_icon_button() -> cosmic::theme::Button {
+fn flat_button() -> cosmic::theme::Button {
     cosmic::theme::Button::Custom {
         active: Box::new(|focused, theme| {
-            accent_icon_style(
+            neutral_ink_style(
                 theme.active(focused, false, &cosmic::theme::Button::Icon),
                 theme,
             )
         }),
         disabled: Box::new(|theme| theme.disabled(&cosmic::theme::Button::Icon)),
         hovered: Box::new(|focused, theme| {
-            accent_icon_style(
+            neutral_ink_style(
                 theme.hovered(focused, false, &cosmic::theme::Button::Icon),
                 theme,
             )
         }),
         pressed: Box::new(|focused, theme| {
-            accent_icon_style(
+            neutral_ink_style(
                 theme.pressed(focused, false, &cosmic::theme::Button::Icon),
                 theme,
             )
@@ -535,12 +537,13 @@ impl StatusHub {
 
         let action: Element<'_, Message> = if showing_settings {
             cosmic::widget::button::text(fl!("save"))
+                .class(flat_button())
                 .height(Length::Fixed(control))
                 .on_press(Message::SaveSettings)
                 .into()
         } else {
             let settings = cosmic::widget::button::icon(symbols::settings())
-                .class(accent_icon_button())
+                .class(flat_button())
                 .padding(popup::header_icon_padding())
                 .width(Length::Fixed(control))
                 .height(Length::Fixed(control));
