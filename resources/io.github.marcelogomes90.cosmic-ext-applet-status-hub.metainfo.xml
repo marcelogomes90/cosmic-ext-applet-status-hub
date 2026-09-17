@@ -4,8 +4,9 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-only</project_license>
   <project_group>COSMIC</project_group>
+  <developer_name>Marcelo Gomes</developer_name>
   <developer id="io.github.marcelogomes90">
-    <name>marcelogomes90</name>
+    <name>Marcelo Gomes</name>
   </developer>
   <name>Status Hub</name>
   <name xml:lang="cs">Centrum stavu</name>
@@ -226,6 +227,8 @@
   <launchable type="desktop-id">io.github.marcelogomes90.cosmic-ext-applet-status-hub.desktop</launchable>
   <url type="homepage">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub</url>
   <url type="bugtracker">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub/issues</url>
+  <url type="help">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub#readme</url>
+  <url type="contact">mailto:marcelo.sobrinho@outlook.com</url>
   <url type="vcs-browser">https://github.com/marcelogomes90/cosmic-ext-applet-status-hub</url>
   <provides>
     <id>com.system76.CosmicApplet</id>
