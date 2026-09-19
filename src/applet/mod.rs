@@ -452,6 +452,19 @@ impl StatusHub {
         list::button(row).on_press(on_press)
     }
 
+    fn empty_row<'a>() -> Element<'a, Message> {
+        cosmic::widget::row::with_children(vec![
+            Self::symbol(symbols::empty(), popup::ROW_ICON),
+            text::body(fl!("empty-state"))
+                .width(Length::Fill)
+                .ellipsize(Ellipsize::End(EllipsizeHeightLimit::Lines(2)))
+                .into(),
+        ])
+        .align_y(cosmic::iced::Alignment::Center)
+        .spacing(cosmic::theme::spacing().space_xs)
+        .into()
+    }
+
     fn link_row<'a>(
         handle: icon::Handle,
         label: String,
@@ -629,7 +642,7 @@ impl StatusHub {
 
         let card = Self::settings_card();
         let card = if rows.is_empty() {
-            card.add(text::body(fl!("empty-state")))
+            card.add(Self::empty_row())
         } else {
             rows.into_iter()
                 .fold(card, |card, item| card.add(self.settings_row(item)))

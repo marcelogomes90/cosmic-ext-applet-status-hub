@@ -18,6 +18,7 @@ bundled! {
     bug => "bug-symbolic.svg",
     code => "code-symbolic.svg",
     droplet => "droplet-symbolic.svg",
+    empty => "empty-symbolic.svg",
     grid => "grid-symbolic.svg",
     grip => "grip-symbolic.svg",
     link => "link-symbolic.svg",
