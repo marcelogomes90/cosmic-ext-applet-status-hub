@@ -356,6 +356,14 @@
     <keyword xml:lang="zh-CN">面板</keyword>
   </keywords>
   <releases>
+    <release type="stable" version="1.5.11" date="2026-09-18">
+      <description>
+        <p>This patch lines up the settings entry that appears when no app is in the tray.</p>
+        <ul>
+          <li>Marks the "No apps available" line in settings with a glyph of its own, so it lines up with every other row in the list instead of starting flush against the edge.</li>
+        </ul>
+      </description>
+    </release>
     <release type="stable" version="1.5.10" date="2026-09-16">
       <description>
         <p>This patch settles the popup header on the desktop's own icon and the theme's ordinary ink.</p>
