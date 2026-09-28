@@ -19,7 +19,7 @@
     "--filesystem=~/.local/share/flatpak/exports/share/icons:ro",
     "--filesystem=/var/lib/flatpak/app:ro",
     "--filesystem=~/.local/share/flatpak/app:ro",
-    "--filesystem=~/.icons:ro"
+    "--filesystem=home:ro"
   ],
   "build-options": {
     "append-path": "/usr/lib/sdk/rust-stable/bin",
