@@ -1,0 +1,17 @@
+app-title = Status Hub
+settings = Inställningar
+appearance = Utseende
+colour-icons = Färg ikoner 
+hub-side = Knappposition
+hub-side-left = Vänster
+hub-side-right = Höger
+tray-icons = Ikoner i systemfältet
+links = Länkar
+save = Spara
+no-watcher = Ingen statusnotifieringsövervakare körs
+connecting = Ansluter…
+empty-state = Inga program tillgängliga 
+pin-to-panel = Fäst till panel
+link-issues = Problem
+link-developer = Utvecklare
+link-repository = Källkod
